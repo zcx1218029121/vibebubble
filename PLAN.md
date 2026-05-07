@@ -9,7 +9,36 @@
 - **版本**: v0.5.0
 - **已实现**: 核心流程跑通（呼出 → 输入 → 转换 → 复制）
 - **完成度**: SPEC.md 功能的 ~40%
-- **主要风险**: SQLite 并发必崩、多后端是假实现
+- **待修复**: 剪贴板写入问题、设置页面独立窗口
+
+---
+
+## UI/UX 修复
+
+### UI-1 🟡 气泡窗口无边框
+**问题**: 气泡窗口有原生标题栏，不够简洁
+**修复**: `decorations: false`，自定义拖拽区域
+**状态**: ✅ 已完成
+
+### UI-2 🟡 输入/输出区域滚动
+**问题**: 长文本无法滚动查看
+**修复**: 输入框和输出区设置 `max-height` + `overflow-y-auto`
+**状态**: ✅ 已完成
+
+### UI-3 🟡 设置页面独立窗口
+**问题**: 设置在气泡内以 Modal 形式展示，耦合且高度受限
+**修复**: 单独的 settings 窗口（560x600），通过 Tauri window API 打开
+**状态**: 🔄 进行中（窗口已配置，路由未实现）
+
+### UI-4 🔴 剪贴板写入失败
+**问题**: `writeText` 调用无反应或报错
+**修复**: 排查 `tauri-plugin-clipboard-manager` 配置，验证 permissions
+**状态**: 🔴 待修复
+
+### UI-5 🟡 历史记录返回完整响应
+**问题**: `get_history` 返回完整 output 文本，前端存储冗余
+**修复**: 历史记录只存 input + 模板名，output 按需从 API 获取或存摘要
+**状态**: 🔄 进行中（需要确定数据结构）
 
 ---
 
@@ -24,18 +53,22 @@
 let conn = Connection::open(&db_path)?;
 conn.busy_timeout(Duration::from_secs(5))?;
 ```
+**状态**: ✅ 已完成
 
 ### 0.2 🔴 transform_text 无 Timeout
 **问题**: `mmx` 卡住时进程永久 block
-**修复**: 用 `std::process::Command` + `tokio::process::Command` 的 timeout 机制，或用 `wait_timeout` crate
+**修复**: 30秒 timeout
+**状态**: ✅ 已完成
 
 ### 0.3 🔴 假多后端 UI
 **问题**: 设置里有 OpenAI/Claude/Ollama 下拉选项但全是 disabled，实际只调 mmx
-**修复**: 把 disabled 选项删干净，只留 "MiniMax (mmx CLI)"，后续 Phase 1 再加回
+**修复**: 清理 disabled 选项，只留 "MiniMax (mmx CLI)"，后续 Phase 1 再加回
+**状态**: ✅ 已完成
 
 ### 0.4 🟡 配置加载无校验
 **问题**: `load_config` 失败后粗暴 fallback，可能丢用户自定义模板
-**修复**: 加载后做 schema 校验，字段缺失时做合并而不是全量替换
+**修复**: 加载后做 schema 校验，字段缺失时做**合并**而不是全量替换
+**状态**: ✅ 已完成
 
 ---
 
@@ -66,7 +99,7 @@ enum AIError {
 
 | 后端 | 实现方式 | 优先级 |
 |------|---------|-------|
-| MiniMax (mmx CLI) | `mmx text chat --system ...` | ✅ 已实现，重构进 trait |
+| MiniMax | REST API (reqwest) | P1 |
 | OpenAI | REST API (reqwest) | P1 |
 | Claude | REST API (reqwest) | P1 |
 | Ollama | REST API (reqwest) | P2 |
@@ -88,12 +121,9 @@ async fn transform_text(text: String, system_prompt: String, backend: String) ->
 }
 ```
 
-### 1.4 API Key 安全存储
+### 1.4 API Key 存储
 
-**不要**放在 `config.json` 明文。选项：
-- macOS: Keychain（推荐，用 `security` crate）
-- Windows: Credential Manager
-- 临时方案: env var 注入
+跨平台明文 JSON 配置，简单加密即可。后续可升级为平台特定安全存储（Keychain/Credential Manager）。
 
 ---
 

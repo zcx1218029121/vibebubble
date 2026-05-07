@@ -1,94 +1,402 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import type { AppConfig, PromptTemplate, HistoryItem } from "./types";
+import { PRESET_TEMPLATES, DEFAULT_BACKEND_CONFIG } from "./types";
 
-interface PromptTemplate {
-  id: string;
-  name: string;
-  prompt: string;
-  description: string;
+const DEFAULT_TEMPLATE: PromptTemplate = PRESET_TEMPLATES[0];
+
+// Settings Content Component for separate settings window
+function SettingsContent() {
+  const [settingsTab, setSettingsTab] = useState<"general" | "templates" | "history">("general");
+  const [config, setConfig] = useState<AppConfig>({
+    templates: PRESET_TEMPLATES,
+    selected_template_id: "default",
+    output_mode: "clipboard",
+    selected_backend: "minimax",
+    backends: DEFAULT_BACKEND_CONFIG,
+  });
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [selectedHistory, setSelectedHistory] = useState<HistoryItem | null>(null);
+  const [editingTemplate, setEditingTemplate] = useState<PromptTemplate | null>(null);
+  const [isNewTemplate, setIsNewTemplate] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2000);
+  };
+
+  const loadConfig = async () => {
+    try {
+      const cfg = await invoke<AppConfig>("load_config");
+      if (cfg.templates && cfg.templates.length > 0) {
+        setConfig(cfg);
+      } else {
+        setConfig({
+          ...cfg,
+          templates: PRESET_TEMPLATES,
+          selected_template_id: cfg.selected_template_id || "default",
+        });
+      }
+    } catch (err) {
+      console.error("Failed to load config:", err);
+    }
+  };
+
+  const loadHistory = async () => {
+    try {
+      const items = await invoke<HistoryItem[]>("get_history", { limit: 100 });
+      setHistory(items);
+    } catch (err) {
+      console.error("Failed to load history:", err);
+    }
+  };
+
+  useEffect(() => {
+    loadConfig();
+    loadHistory();
+  }, []);
+
+  const saveConfig = async (cfg?: AppConfig) => {
+    try {
+      await invoke("save_config", { config: cfg || config });
+    } catch (err) {
+      console.error("Failed to save config:", err);
+    }
+  };
+
+  const formatTime = (timestamp: number) => {
+    const d = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now.getTime() - d.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    if (diffMins < 1) return "刚刚";
+    if (diffMins < 60) return `${diffMins} 分钟前`;
+    if (diffHours < 24) return `${diffHours} 小时前`;
+    if (diffDays < 7) return `${diffDays} 天前`;
+    return d.toLocaleDateString("zh-CN", { month: "short", day: "numeric" });
+  };
+
+  return (
+    <div className="h-full flex flex-col relative">
+      {/* Toast */}
+      {toast && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-gray-700 text-white px-4 py-2 rounded-lg shadow-lg">
+          {toast}
+        </div>
+      )}
+      <div className="flex-1 overflow-y-auto p-4">
+        <h2 className="text-lg font-medium text-gray-200 mb-4">⚙️ 设置</h2>
+
+        {/* Tabs */}
+        <div className="flex border-b border-gray-700 mb-4">
+          <button
+            onClick={() => setSettingsTab("general")}
+            className={`px-4 py-2 text-sm font-medium transition-colors ${
+              settingsTab === "general" ? "text-blue-400 border-b-2 border-blue-400" : "text-gray-400 hover:text-gray-200"
+            }`}
+          >
+            通用
+          </button>
+          <button
+            onClick={() => setSettingsTab("templates")}
+            className={`px-4 py-2 text-sm font-medium transition-colors ${
+              settingsTab === "templates" ? "text-blue-400 border-b-2 border-blue-400" : "text-gray-400 hover:text-gray-200"
+            }`}
+          >
+            模板
+          </button>
+          <button
+            onClick={() => setSettingsTab("history")}
+            className={`px-4 py-2 text-sm font-medium transition-colors ${
+              settingsTab === "history" ? "text-blue-400 border-b-2 border-blue-400" : "text-gray-400 hover:text-gray-200"
+            }`}
+          >
+            历史
+          </button>
+        </div>
+
+        {settingsTab === "general" && (
+          <div>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-300 mb-2">输出模式</label>
+              <select
+                value={config.output_mode}
+                onChange={(e) => setConfig({ ...config, output_mode: e.target.value })}
+                className="w-full bg-gray-700 rounded-lg p-2 text-gray-100 outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="clipboard">剪贴板（转换后自动复制）</option>
+                <option value="manual">手动（自己复制）</option>
+              </select>
+            </div>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-300 mb-2">AI 后端</label>
+              <select
+                value={config.selected_backend}
+                onChange={(e) => setConfig({ ...config, selected_backend: e.target.value })}
+                className="w-full bg-gray-700 rounded-lg p-2 text-gray-100 outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="minimax">MiniMax</option>
+              </select>
+            </div>
+            <button
+              onClick={() => { saveConfig(); showToast("设置已保存"); }}
+              className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+            >
+              保存
+            </button>
+          </div>
+        )}
+
+        {settingsTab === "templates" && !editingTemplate && (
+          <div className="space-y-2">
+            {config.templates.map((template) => (
+              <div key={template.id} className="p-3 rounded-lg border border-gray-700 bg-gray-700/30">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="font-medium text-gray-200">{template.name}</span>
+                    <p className="text-xs text-gray-400 mt-1">{template.description}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        setEditingTemplate({ ...template });
+                        setIsNewTemplate(false);
+                      }}
+                      className="text-xs px-2 py-1 bg-blue-600/50 hover:bg-blue-600 rounded transition-colors"
+                    >
+                      编辑
+                    </button>
+                    {config.templates.length > 1 && (
+                      <button
+                        onClick={() => {
+                          const newTemplates = config.templates.filter((t) => t.id !== template.id);
+                          const newSelectedId = config.selected_template_id === template.id
+                            ? newTemplates[0].id
+                            : config.selected_template_id;
+                          const newConfig = { ...config, templates: newTemplates, selected_template_id: newSelectedId };
+                          setConfig(newConfig);
+                          saveConfig(newConfig);
+                          showToast("模板已删除");
+                        }}
+                        className="text-xs px-2 py-1 bg-red-600/50 hover:bg-red-600 rounded transition-colors"
+                      >
+                        删除
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+            <button
+              onClick={() => {
+                setEditingTemplate({ id: `t_${Date.now()}`, name: "新模板", description: "描述", prompt: "" });
+                setIsNewTemplate(true);
+              }}
+              className="w-full py-2 border-2 border-dashed border-gray-600 rounded-lg text-gray-400 hover:text-gray-200 hover:border-gray-500 transition-colors"
+            >
+              + 添加模板
+            </button>
+          </div>
+        )}
+
+        {settingsTab === "templates" && editingTemplate && (
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">模板名称</label>
+              <input
+                type="text"
+                value={editingTemplate.name}
+                onChange={(e) => setEditingTemplate({ ...editingTemplate, name: e.target.value })}
+                className="w-full bg-gray-700 rounded-lg p-2 text-gray-100 outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">描述</label>
+              <input
+                type="text"
+                value={editingTemplate.description}
+                onChange={(e) => setEditingTemplate({ ...editingTemplate, description: e.target.value })}
+                className="w-full bg-gray-700 rounded-lg p-2 text-gray-100 outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">提示词</label>
+              <textarea
+                value={editingTemplate.prompt}
+                onChange={(e) => setEditingTemplate({ ...editingTemplate, prompt: e.target.value })}
+                className="w-full h-40 bg-gray-700 rounded-lg p-3 text-gray-100 text-sm resize-none outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setEditingTemplate(null)}
+                className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => {
+                  let newConfig;
+                  if (isNewTemplate) {
+                    newConfig = {
+                      ...config,
+                      templates: [...config.templates, editingTemplate],
+                      selected_template_id: editingTemplate.id,
+                    };
+                  } else {
+                    newConfig = {
+                      ...config,
+                      templates: config.templates.map((t) => t.id === editingTemplate.id ? editingTemplate : t),
+                    };
+                  }
+                  setConfig(newConfig);
+                  setEditingTemplate(null);
+                  saveConfig(newConfig);
+                  showToast("模板已保存");
+                }}
+                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+              >
+                保存
+              </button>
+            </div>
+          </div>
+        )}
+
+        {settingsTab === "history" && (
+          <div className="space-y-2">
+            {history.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <p>暂无历史记录</p>
+              </div>
+            ) : (
+              history.map((item) => (
+                <div
+                  key={item.id}
+                  className="p-3 rounded-lg bg-gray-700/30 border border-gray-700 cursor-pointer hover:bg-gray-700/50"
+                  onClick={() => setSelectedHistory(item)}
+                >
+                  <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
+                    <span>{formatTime(item.timestamp)}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 bg-blue-600/30 text-blue-300 rounded">{item.template_name}</span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const textarea = document.createElement("textarea");
+                          textarea.value = item.input;
+                          textarea.style.position = "fixed";
+                          textarea.style.opacity = "0";
+                          document.body.appendChild(textarea);
+                          textarea.select();
+                          document.execCommand("copy");
+                          document.body.removeChild(textarea);
+                          showToast("已复制输入");
+                        }}
+                        className="text-xs px-1.5 py-0.5 bg-gray-600 hover:bg-gray-500 rounded"
+                      >
+                        复制输入
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-300 break-words">{item.input}</p>
+                  <p className="text-xs text-gray-400 mt-1 break-words">{item.output_preview}</p>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* History Detail Modal */}
+        {selectedHistory && (
+          <div
+            className="fixed inset-0 bg-black/70 flex items-center justify-center z-50"
+            onClick={() => setSelectedHistory(null)}
+          >
+            <div
+              className="bg-gray-800 rounded-xl w-[500px] max-h-[80vh] overflow-hidden flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between p-4 border-b border-gray-700">
+                <h3 className="text-lg font-medium text-gray-200">历史详情</h3>
+                <button
+                  onClick={() => setSelectedHistory(null)}
+                  className="text-gray-400 hover:text-white text-xl"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4">
+                <div className="mb-4">
+                  <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
+                    <span>{formatTime(selectedHistory.timestamp)}</span>
+                    <span className="px-2 py-0.5 bg-blue-600/30 text-blue-300 rounded">{selectedHistory.template_name}</span>
+                  </div>
+                  <div className="mb-4">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs text-gray-500">输入：</span>
+                      <button
+                        onClick={() => {
+                          const textarea = document.createElement("textarea");
+                          textarea.value = selectedHistory.input;
+                          textarea.style.position = "fixed";
+                          textarea.style.opacity = "0";
+                          document.body.appendChild(textarea);
+                          textarea.select();
+                          document.execCommand("copy");
+                          document.body.removeChild(textarea);
+                          showToast("输入已复制");
+                        }}
+                        className="text-xs px-2 py-0.5 bg-gray-600 hover:bg-gray-500 rounded transition-colors"
+                      >
+                        复制
+                      </button>
+                    </div>
+                    <p className="text-sm text-gray-300 break-words whitespace-pre-wrap mt-1 bg-gray-700/50 rounded-lg p-3 max-h-[200px] overflow-y-auto">{selectedHistory.input}</p>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs text-gray-500">输出：</span>
+                      <button
+                        onClick={() => {
+                          const textarea = document.createElement("textarea");
+                          textarea.value = selectedHistory.output_preview;
+                          textarea.style.position = "fixed";
+                          textarea.style.opacity = "0";
+                          document.body.appendChild(textarea);
+                          textarea.select();
+                          document.execCommand("copy");
+                          document.body.removeChild(textarea);
+                          showToast("输出已复制");
+                        }}
+                        className="text-xs px-2 py-0.5 bg-gray-600 hover:bg-gray-500 rounded transition-colors"
+                      >
+                        复制
+                      </button>
+                    </div>
+                    <p className="text-sm text-gray-300 break-words whitespace-pre-wrap mt-1 bg-gray-700/50 rounded-lg p-3 max-h-[300px] overflow-y-auto">{selectedHistory.output_preview}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
-
-interface HistoryItem {
-  id: number;
-  input: string;
-  output: string;
-  template_name: string;
-  timestamp: number;
-}
-
-interface AppConfig {
-  templates: PromptTemplate[];
-  selected_template_id: string;
-  output_mode: string;
-  selected_backend: string;
-}
-
-const DEFAULT_TEMPLATE: PromptTemplate = {
-  id: "default",
-  name: "想法→任务",
-  description: "将粗糙想法转化为清晰可执行的任务描述",
-  prompt: `你是一个代码助手。用户会输入一段粗糙的想法或需求，请将其转化为清晰、具体、可执行的任务描述。
-
-要求：
-1. 清晰描述要做什么（不是怎么做）
-2. 列出具体的步骤（如果复杂）
-3. 标注可能的难点或需要注意的地方
-4. 保持简洁，用 Bullet Point
-
-直接输出结果，不要加任何前缀或解释。`,
-};
-
-const PRESET_TEMPLATES: PromptTemplate[] = [
-  DEFAULT_TEMPLATE,
-  {
-    id: "code-comment",
-    name: "代码→注释",
-    description: "给代码添加注释和说明",
-    prompt: `你是一个代码注释助手。用户会输入一段代码，请添加清晰、准确的中文注释。
-
-要求：
-1. 注释要解释 WHY，不是 WHAT（不要写"这是循环"这种废话）
-2. 复杂逻辑要详细解释
-3. 标注可能的边界情况和坑
-4. 保持简洁，不要过度注释
-
-直接输出带注释的代码，不要加任何前缀。`,
-  },
-  {
-    id: "translate",
-    name: "翻译润色",
-    description: "将中文翻译成英文或润色英文",
-    prompt: `你是一个翻译助手。用户会输入一段中文或英文，请翻译成目标语言并润色。
-
-要求：
-1. 保持原文的语气和风格
-2. 符合目标语言的表达习惯
-3. 专业技术术语保持准确
-
-直接输出翻译结果，不要加任何前缀或解释。`,
-  },
-  {
-    id: "summarize",
-    name: "总结摘要",
-    description: "将长文本总结为关键要点",
-    prompt: `你是一个总结助手。用户会输入一段文字，请提取关键信息并总结。
-
-要求：
-1. 提取 3-7 个关键要点
-2. 每个要点一句话
-3. 按重要性排序
-4. 保留原文的核心信息
-
-直接输出总结，不要加任何前缀。`,
-  },
-];
 
 function App() {
+  const [windowType, setWindowType] = useState<"main" | "settings">("main");
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [settingsTab, setSettingsTab] = useState<"general" | "templates" | "history">("templates");
   const [config, setConfig] = useState<AppConfig>({
@@ -96,12 +404,27 @@ function App() {
     selected_template_id: "default",
     output_mode: "clipboard",
     selected_backend: "minimax",
+    backends: DEFAULT_BACKEND_CONFIG,
   });
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [editingTemplate, setEditingTemplate] = useState<PromptTemplate | null>(null);
   const [isNewTemplate, setIsNewTemplate] = useState(false);
   const [historyExpanded, setHistoryExpanded] = useState<number | null>(null);
   const configLoaded = useRef(false);
+
+  // Detect window type on mount
+  useEffect(() => {
+    const detectWindowType = async () => {
+      try {
+        const win = getCurrentWindow();
+        const label = win.label;
+        setWindowType(label === "settings" ? "settings" : "main");
+      } catch (e) {
+        console.error("Failed to detect window type:", e);
+      }
+    };
+    detectWindowType();
+  }, []);
 
   // Load config and history on mount
   useEffect(() => {
@@ -110,6 +433,23 @@ function App() {
     loadConfig();
     loadHistory();
   }, []);
+
+  // Reload config when window gains focus (to catch changes from settings window)
+  useEffect(() => {
+    if (windowType !== "main") return;
+
+    const handleFocus = () => {
+      loadConfig();
+      loadHistory();
+    };
+
+    const win = getCurrentWindow();
+    win.onFocusChanged(handleFocus);
+
+    return () => {
+      // cleanup if needed
+    };
+  }, [windowType]);
 
   const loadConfig = async () => {
     try {
@@ -130,6 +470,7 @@ function App() {
         selected_template_id: "default",
         output_mode: "clipboard",
         selected_backend: "minimax",
+        backends: DEFAULT_BACKEND_CONFIG,
       });
     }
   };
@@ -182,9 +523,32 @@ function App() {
       await loadHistory();
 
       if (config.output_mode === "clipboard") {
-        await writeText(result);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        try {
+          await writeText(result);
+          setCopied(true);
+          setToast("已复制到剪贴板");
+        } catch (clipErr) {
+          console.warn("Tauri clipboard failed, trying fallback:", clipErr);
+          try {
+            const textarea = document.createElement("textarea");
+            textarea.value = result;
+            textarea.style.position = "fixed";
+            textarea.style.opacity = "0";
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand("copy");
+            document.body.removeChild(textarea);
+            setCopied(true);
+            setToast("已复制到剪贴板");
+          } catch (fallbackErr) {
+            console.error("剪贴板写入失败:", fallbackErr);
+            setToast("复制失败");
+          }
+        }
+        setTimeout(() => {
+          setCopied(false);
+          setToast(null);
+        }, 2000);
       }
     } catch (err) {
       setOutput(`错误: ${err}`);
@@ -195,12 +559,33 @@ function App() {
 
   const handleCopy = async (text: string) => {
     try {
+      // Try Tauri clipboard plugin first
       await writeText(text);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setToast("已复制到剪贴板");
     } catch (err) {
-      console.error("复制失败:", err);
+      console.warn("Tauri clipboard failed, trying fallback:", err);
+      // Fallback: create temporary textarea
+      try {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+        setCopied(true);
+        setToast("已复制到剪贴板");
+      } catch (fallbackErr) {
+        console.error("复制失败:", fallbackErr);
+        setToast("复制失败");
+      }
     }
+    setTimeout(() => {
+      setCopied(false);
+      setToast(null);
+    }, 2000);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -298,20 +683,48 @@ function App() {
     return d.toLocaleDateString("zh-CN", { month: "short", day: "numeric" });
   };
 
+  // If this is the settings window, only render settings
+  if (windowType === "settings") {
+    return (
+      <div
+        className="h-screen bg-gray-900 text-white flex flex-col select-none overflow-hidden"
+        style={{ padding: '12px' }}
+      >
+        <SettingsContent />
+      </div>
+    );
+  }
+
   return (
-    <div className="h-screen bg-gray-900 text-white flex flex-col p-4 select-none">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-3">
+    <div
+      className="h-screen bg-gray-900 text-white flex flex-col select-none overflow-hidden"
+      style={{ padding: '24px' }}
+    >
+      {/* Toast */}
+      {toast && (
+        <div className="absolute top-12 left-1/2 -translate-x-1/2 z-50 bg-gray-700 text-white px-4 py-2 rounded-lg shadow-lg text-sm">
+          {toast}
+        </div>
+      )}
+      {/* Header - draggable */}
+      <div
+        className="flex items-center justify-between mb-3 flex-shrink-0"
+        data-tauri-drag-region
+        style={{ webkitAppRegion: "drag" } as React.CSSProperties}
+      >
         <div className="flex items-center gap-2">
           <span className="text-lg">💭</span>
           <span className="font-medium text-gray-200">VibeBubble</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2" style={{ webkitAppRegion: "no-drag" } as React.CSSProperties}>
           <span className="text-xs text-gray-500">v0.5.0</span>
           <button
-            onClick={() => {
-              setSettingsTab("templates");
-              setShowSettings(true);
+            onClick={async () => {
+              try {
+                await invoke("open_settings_window");
+              } catch (e) {
+                console.error("Failed to open settings:", e);
+              }
             }}
             className="text-gray-400 hover:text-white transition-colors"
             title="设置"
@@ -322,7 +735,7 @@ function App() {
       </div>
 
       {/* Template Selector */}
-      <div className="mb-3">
+      <div className="mb-3 flex-shrink-0">
         <select
           value={config.selected_template_id}
           onChange={(e) =>
@@ -338,14 +751,15 @@ function App() {
         </select>
       </div>
 
-      {/* Input Area */}
-      <div className="flex-1 flex flex-col">
+      {/* Main Content - no outer scroll, inner scroll only */}
+      <div className="flex-1 flex flex-col gap-2 overflow-hidden">
+        {/* Input Area */}
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={`输入你的想法，按 Enter 转换...\n当前模板: ${getCurrentTemplate().name}`}
-          className="flex-1 w-full bg-gray-800 rounded-xl p-3 text-gray-100 placeholder-gray-500 resize-none outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full h-28 bg-gray-800 rounded-lg p-3 text-gray-100 placeholder-gray-500 resize-none outline-none focus:ring-2 focus:ring-blue-500 mt-2"
           disabled={loading}
         />
 
@@ -353,11 +767,11 @@ function App() {
         <button
           onClick={handleSubmit}
           disabled={!input.trim() || loading}
-          className="mt-3 w-full py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg font-medium transition-colors"
+          className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg font-medium transition-colors"
         >
           {loading ? (
             <span className="flex items-center justify-center gap-2">
-              <span className="animate-spin">⏳</span>
+              <span className="ai-spinner"></span>
               AI 转换中...
             </span>
           ) : (
@@ -367,10 +781,10 @@ function App() {
 
         {/* Output Area */}
         {output && (
-          <div className="mt-3">
-            <div className="flex items-center justify-between mb-1">
+          <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+            <div className="flex items-center justify-between mb-1 flex-shrink-0">
               <span className="text-xs text-gray-400">
-                输出结果 {copied && "✅ 已复制到剪贴板"}
+                输出结果 {copied && "✅ 已复制"}
               </span>
               <button
                 onClick={() => handleCopy(output)}
@@ -379,7 +793,7 @@ function App() {
                 📋 复制
               </button>
             </div>
-            <div className="w-full h-32 bg-gray-800 rounded-xl p-3 text-gray-100 overflow-y-auto whitespace-pre-wrap">
+            <div className="flex-1 overflow-y-auto bg-gray-800 rounded-xl p-3 text-gray-100 whitespace-pre-wrap select-text">
               {output}
             </div>
           </div>
@@ -387,7 +801,7 @@ function App() {
       </div>
 
       {/* Footer */}
-      <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
+      <div className="mt-3 flex items-center justify-between text-xs text-gray-500 flex-shrink-0">
         <span>按 Esc 隐藏</span>
         <span>⚙️ Cmd+Shift+V 呼出</span>
       </div>
@@ -395,7 +809,7 @@ function App() {
       {/* Settings Modal */}
       {showSettings && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-xl w-[560px] max-h-[85vh] overflow-hidden flex flex-col">
+          <div className="bg-gray-800 rounded-xl w-[560px] max-h-[90vh] overflow-hidden flex flex-col">
             {/* Settings Header */}
             <div className="flex items-center justify-between p-4 border-b border-gray-700">
               <h2 className="text-lg font-medium text-gray-200">⚙️ 设置</h2>
@@ -612,7 +1026,7 @@ function App() {
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    handleCopy(item.output);
+                                    handleCopy(item.output_preview);
                                   }}
                                   className="text-xs px-2 py-1 bg-gray-600 hover:bg-gray-500 rounded transition-colors"
                                 >
@@ -647,7 +1061,7 @@ function App() {
                                 <div>
                                   <span className="text-xs text-gray-500">输出：</span>
                                   <p className="text-xs text-gray-300 mt-1 whitespace-pre-wrap">
-                                    {item.output}
+                                    {item.output_preview}
                                   </p>
                                 </div>
                               </div>
@@ -691,9 +1105,116 @@ function App() {
                       }
                       className="w-full bg-gray-700 rounded-lg p-2 text-gray-100 outline-none focus:ring-2 focus:ring-blue-500"
                     >
-                      <option value="minimax">MiniMax (mmx CLI)</option>
+                      <option value="minimax">MiniMax</option>
+                      <option value="openai">OpenAI</option>
+                      <option value="claude">Claude</option>
+                      <option value="ollama">Ollama (本地)</option>
                     </select>
                   </div>
+
+                  {/* Backend Config - MiniMax */}
+                  {config.selected_backend === "minimax" && (
+                    <div className="space-y-3 mt-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-400 mb-1">MiniMax API Key</label>
+                        <input
+                          type="password"
+                          value={config.backends?.minimax_api_key || ""}
+                          onChange={(e) => setConfig({ ...config, backends: { ...config.backends, minimax_api_key: e.target.value } })}
+                          placeholder="输入 MiniMax API Key"
+                          className="w-full bg-gray-700 rounded-lg p-2 text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-400 mb-1">模型</label>
+                        <input
+                          type="text"
+                          value={config.backends?.minimax_model || ""}
+                          onChange={(e) => setConfig({ ...config, backends: { ...config.backends, minimax_model: e.target.value } })}
+                          placeholder="MiniMax-Text-01"
+                          className="w-full bg-gray-700 rounded-lg p-2 text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Backend Config - OpenAI */}
+                  {config.selected_backend === "openai" && (
+                    <div className="space-y-3 mt-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-400 mb-1">OpenAI API Key</label>
+                        <input
+                          type="password"
+                          value={config.backends?.openai_api_key || ""}
+                          onChange={(e) => setConfig({ ...config, backends: { ...config.backends, openai_api_key: e.target.value } })}
+                          placeholder="sk-..."
+                          className="w-full bg-gray-700 rounded-lg p-2 text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-400 mb-1">模型</label>
+                        <input
+                          type="text"
+                          value={config.backends?.openai_model || ""}
+                          onChange={(e) => setConfig({ ...config, backends: { ...config.backends, openai_model: e.target.value } })}
+                          placeholder="gpt-4o-mini"
+                          className="w-full bg-gray-700 rounded-lg p-2 text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Backend Config - Claude */}
+                  {config.selected_backend === "claude" && (
+                    <div className="space-y-3 mt-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-400 mb-1">Claude API Key</label>
+                        <input
+                          type="password"
+                          value={config.backends?.claude_api_key || ""}
+                          onChange={(e) => setConfig({ ...config, backends: { ...config.backends, claude_api_key: e.target.value } })}
+                          placeholder="sk-ant-..."
+                          className="w-full bg-gray-700 rounded-lg p-2 text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-400 mb-1">模型</label>
+                        <input
+                          type="text"
+                          value={config.backends?.claude_model || ""}
+                          onChange={(e) => setConfig({ ...config, backends: { ...config.backends, claude_model: e.target.value } })}
+                          placeholder="claude-sonnet-4-20250514"
+                          className="w-full bg-gray-700 rounded-lg p-2 text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Backend Config - Ollama */}
+                  {config.selected_backend === "ollama" && (
+                    <div className="space-y-3 mt-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-400 mb-1">Ollama 地址</label>
+                        <input
+                          type="text"
+                          value={config.backends?.ollama_host || ""}
+                          onChange={(e) => setConfig({ ...config, backends: { ...config.backends, ollama_host: e.target.value } })}
+                          placeholder="http://localhost:11434"
+                          className="w-full bg-gray-700 rounded-lg p-2 text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-400 mb-1">模型</label>
+                        <input
+                          type="text"
+                          value={config.backends?.ollama_model || ""}
+                          onChange={(e) => setConfig({ ...config, backends: { ...config.backends, ollama_model: e.target.value } })}
+                          placeholder="llama3.2"
+                          className="w-full bg-gray-700 rounded-lg p-2 text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
             </div>

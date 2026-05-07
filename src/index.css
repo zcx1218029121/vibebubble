@@ -13,3 +13,21 @@ body {
   padding: 0;
   overflow: hidden;
 }
+
+/* AI Spinner - colorful rotating ring */
+.ai-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2.5px solid transparent;
+  border-top-color: #a855f7;
+  border-right-color: #3b82f6;
+  border-bottom-color: #22c55e;
+  border-left-color: #f59e0b;
+  border-radius: 50%;
+  animation: ai-spin 0.8s linear infinite;
+}
+
+@keyframes ai-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}

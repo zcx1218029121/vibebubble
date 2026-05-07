@@ -15,14 +15,25 @@
         "label": "main",
         "title": "VibeBubble",
         "width": 480,
-        "height": 320,
+        "height": 400,
         "center": true,
         "resizable": false,
-        "decorations": true,
+        "decorations": false,
         "alwaysOnTop": true,
         "skipTaskbar": true,
         "visible": true,
         "focus": true
+      },
+      {
+        "label": "settings",
+        "title": "VibeBubble 设置",
+        "width": 560,
+        "height": 600,
+        "center": true,
+        "resizable": false,
+        "decorations": true,
+        "visible": false,
+        "url": "index.html"
       }
     ],
     "security": {

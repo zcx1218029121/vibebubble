@@ -1,3 +1,9 @@
+#[cfg(test)]
+mod tests;
+
+mod ai_backend;
+
+use ai_backend::{BackendConfig, AIError, create_backend};
 use log::{error, info};
 use rusqlite::{Connection, Result as SqlResult};
 use serde::{Deserialize, Serialize};
@@ -5,8 +11,6 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
-use tokio::process::Command as AsyncCommand;
-use tokio::time::{timeout, Duration as AsyncDuration};
 use tauri::{menu::{Menu, MenuItem}, tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}, AppHandle, Manager, State, WindowEvent};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
@@ -28,6 +32,8 @@ pub struct AppConfig {
     pub output_mode: String,
     #[serde(rename = "selected_backend")]
     pub selected_backend: String,
+    #[serde(default = "BackendConfig::default")]
+    pub backends: BackendConfig,
 }
 
 impl Default for AppConfig {
@@ -42,6 +48,7 @@ impl Default for AppConfig {
             selected_template_id: "default".to_string(),
             output_mode: "clipboard".to_string(),
             selected_backend: "minimax".to_string(),
+            backends: BackendConfig::default(),
         }
     }
 }
@@ -50,10 +57,12 @@ impl Default for AppConfig {
 pub struct HistoryItem {
     pub id: i64,
     pub input: String,
-    pub output: String,
+    pub output_preview: String,
     pub template_name: String,
     pub timestamp: i64,
 }
+
+const MAX_OUTPUT_PREVIEW: usize = 200;
 
 const DEFAULT_PROMPT: &str = r#"你是一个代码助手。用户会输入一段粗糙的想法或需求，请将其转化为清晰、具体、可执行的任务描述。
 
@@ -138,17 +147,35 @@ async fn load_config(app: AppHandle) -> Result<AppConfig, String> {
         let mut config: AppConfig = serde_json::from_str(&content).map_err(|e| e.to_string())?;
 
         // Validate and fill defaults
+        let defaults = AppConfig::default();
         if config.templates.is_empty() {
-            config.templates = AppConfig::default().templates;
+            config.templates = defaults.templates;
         }
         if config.selected_template_id.is_empty() {
-            config.selected_template_id = "default".to_string();
+            config.selected_template_id = defaults.selected_template_id;
         }
         if config.output_mode.is_empty() {
-            config.output_mode = "clipboard".to_string();
+            config.output_mode = defaults.output_mode;
         }
         if config.selected_backend.is_empty() {
-            config.selected_backend = "minimax".to_string();
+            config.selected_backend = defaults.selected_backend;
+        }
+        // Fill missing backend config fields with defaults
+        let bd = &defaults.backends;
+        if config.backends.minimax_model.is_empty() {
+            config.backends.minimax_model = bd.minimax_model.clone();
+        }
+        if config.backends.openai_model.is_empty() {
+            config.backends.openai_model = bd.openai_model.clone();
+        }
+        if config.backends.claude_model.is_empty() {
+            config.backends.claude_model = bd.claude_model.clone();
+        }
+        if config.backends.ollama_host.is_empty() {
+            config.backends.ollama_host = bd.ollama_host.clone();
+        }
+        if config.backends.ollama_model.is_empty() {
+            config.backends.ollama_model = bd.ollama_model.clone();
         }
 
         Ok(config)
@@ -191,7 +218,14 @@ async fn add_history(
     Ok(HistoryItem {
         id,
         input,
-        output,
+        output_preview: {
+            let chars: Vec<char> = output.chars().collect();
+            if chars.len() > MAX_OUTPUT_PREVIEW {
+                chars[..MAX_OUTPUT_PREVIEW].iter().collect::<String>() + "..."
+            } else {
+                output.clone()
+            }
+        },
         template_name,
         timestamp,
     })
@@ -201,23 +235,32 @@ async fn add_history(
 async fn get_history(state: State<'_, AppState>, limit: Option<usize>) -> Result<Vec<HistoryItem>, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     let limit = limit.unwrap_or(100);
-    
+
     let mut stmt = conn
         .prepare("SELECT id, input, output, template_name, timestamp FROM history ORDER BY timestamp DESC LIMIT ?")
         .map_err(|e| e.to_string())?;
-    
+
     let rows = stmt
         .query_map([limit as i64], |row| {
+            let output: String = row.get(2)?;
+            let output_preview = {
+                let chars: Vec<char> = output.chars().collect();
+                if chars.len() > MAX_OUTPUT_PREVIEW {
+                    chars[..MAX_OUTPUT_PREVIEW].iter().collect::<String>() + "..."
+                } else {
+                    output.clone()
+                }
+            };
             Ok(HistoryItem {
                 id: row.get(0)?,
                 input: row.get(1)?,
-                output: row.get(2)?,
+                output_preview,
                 template_name: row.get(3)?,
                 timestamp: row.get(4)?,
             })
         })
         .map_err(|e| e.to_string())?;
-    
+
     let items: Vec<HistoryItem> = rows.filter_map(|r| r.ok()).collect();
     Ok(items)
 }
@@ -241,42 +284,120 @@ async fn clear_history(state: State<'_, AppState>) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn transform_text(text: String, system_prompt: String) -> Result<String, String> {
-    info!("Transforming text: {}", &text[..text.len().min(50)]);
+async fn transform_text(app: AppHandle, text: String, system_prompt: String) -> Result<String, String> {
+    info!("Transforming text with backend routing: {}", text.chars().take(50).collect::<String>());
 
-    let result = timeout(
-        AsyncDuration::from_secs(60),
-        AsyncCommand::new("mmx")
-            .args(["text", "chat", "--system", &system_prompt, "--", &text])
-            .output()
+    // Load config to determine which backend to use
+    let config = load_config_inner(&app)?;
+    let backend = create_backend(&config.selected_backend, &config.backends)
+        .map_err(|e| e.to_string())?;
+
+    info!("Using backend: {}", backend.name());
+
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(60),
+        backend.transform(&text, &system_prompt)
     ).await;
 
-    let output = match result {
-        Ok(Ok(out)) => out,
+    match result {
+        Ok(Ok(content)) => {
+            info!("Transform result: {}", content.chars().take(50).collect::<String>());
+            Ok(content)
+        }
+        Ok(Err(AIError::Timeout)) => {
+            Err("AI 处理超时，请重试".to_string())
+        }
+        Ok(Err(AIError::RateLimit)) => {
+            Err("请求频率超限，请稍后重试".to_string())
+        }
+        Ok(Err(AIError::Auth(msg))) => {
+            Err(format!("认证失败: {}", msg))
+        }
         Ok(Err(e)) => {
-            error!("Failed to execute mmx: {}", e);
-            return Err(format!("执行失败: {}", e));
+            Err(e.to_string())
         }
         Err(_) => {
-            error!("mmx timed out after 60 seconds");
-            return Err("AI 处理超时（60秒），请重试".to_string());
+            error!("Backend transform timed out after 60 seconds");
+            Err(AIError::Timeout.to_string())
         }
-    };
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        error!("mmx returned error: {}", stderr);
-        return Err(format!("AI 调用失败: {}", stderr));
     }
+}
 
-    let result_text = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    info!("Transform result: {}", &result_text[..result_text.len().min(50)]);
-    Ok(result_text)
+/// Internal config loader (non-command, for use within other commands)
+fn load_config_inner(app: &AppHandle) -> Result<AppConfig, String> {
+    let path = get_config_path(app);
+    if path.exists() {
+        let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        let mut config: AppConfig = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+
+        // Validate and fill defaults
+        let defaults = AppConfig::default();
+        if config.templates.is_empty() {
+            config.templates = defaults.templates;
+        }
+        if config.selected_template_id.is_empty() {
+            config.selected_template_id = defaults.selected_template_id;
+        }
+        if config.output_mode.is_empty() {
+            config.output_mode = defaults.output_mode;
+        }
+        if config.selected_backend.is_empty() {
+            config.selected_backend = defaults.selected_backend;
+        }
+        let bd = &defaults.backends;
+        if config.backends.minimax_model.is_empty() {
+            config.backends.minimax_model = bd.minimax_model.clone();
+        }
+        if config.backends.openai_model.is_empty() {
+            config.backends.openai_model = bd.openai_model.clone();
+        }
+        if config.backends.claude_model.is_empty() {
+            config.backends.claude_model = bd.claude_model.clone();
+        }
+        if config.backends.ollama_host.is_empty() {
+            config.backends.ollama_host = bd.ollama_host.clone();
+        }
+        if config.backends.ollama_model.is_empty() {
+            config.backends.ollama_model = bd.ollama_model.clone();
+        }
+
+        Ok(config)
+    } else {
+        Ok(AppConfig::default())
+    }
 }
 
 #[tauri::command]
 async fn get_default_prompt() -> String {
     DEFAULT_PROMPT.to_string()
+}
+
+#[tauri::command]
+async fn open_settings_window(app: AppHandle) -> Result<(), String> {
+    info!("Opening settings window");
+
+    // Check if settings window already exists
+    if let Some(window) = app.get_webview_window("settings") {
+        window.show().map_err(|e| e.to_string())?;
+        window.set_focus().map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+
+    // Create new settings window
+    let settings_window = tauri::WebviewWindowBuilder::new(
+        &app,
+        "settings",
+        tauri::WebviewUrl::App("index.html".into())
+    )
+    .title("VibeBubble 设置")
+    .inner_size(560.0, 600.0)
+    .center()
+    .resizable(false)
+    .build()
+    .map_err(|e| e.to_string())?;
+
+    settings_window.set_focus().map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -379,6 +500,7 @@ pub fn run() {
             load_config,
             save_config,
             get_default_prompt,
+            open_settings_window,
             add_history,
             get_history,
             delete_history_item,
