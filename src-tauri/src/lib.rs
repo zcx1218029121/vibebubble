@@ -274,10 +274,6 @@ async fn transform_text(app: AppHandle, text: String, system_prompt: String) -> 
             info!("[{}] Success: {}ms, output_len={}", backend.name(), latency_ms, content.len());
             Ok(content)
         }
-        Ok(Err(AIError::Timeout)) => {
-            warn!("[{}] Timeout after {}ms", backend.name(), latency_ms);
-            Err("AI 处理超时，请重试".to_string())
-        }
         Ok(Err(AIError::RateLimit)) => {
             warn!("[{}] Rate limit after {}ms", backend.name(), latency_ms);
             Err("请求频率超限，请稍后重试".to_string())

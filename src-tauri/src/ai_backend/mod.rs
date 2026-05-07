@@ -11,7 +11,6 @@ pub enum AIError {
     Network(String),
     Auth(String),
     RateLimit,
-    Timeout,
     Unknown(String),
 }
 
@@ -21,7 +20,6 @@ impl std::fmt::Display for AIError {
             AIError::Network(s) => write!(f, "网络错误: {}", s),
             AIError::Auth(s) => write!(f, "认证错误: {}", s),
             AIError::RateLimit => write!(f, "请求频率超限，请稍后重试"),
-            AIError::Timeout => write!(f, "请求超时"),
             AIError::Unknown(s) => write!(f, "未知错误: {}", s),
         }
     }
