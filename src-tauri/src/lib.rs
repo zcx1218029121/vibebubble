@@ -3,8 +3,10 @@ use rusqlite::{Connection, Result as SqlResult};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
-use std::process::Command;
 use std::sync::Mutex;
+use std::time::Duration;
+use tokio::process::Command as AsyncCommand;
+use tokio::time::{timeout, Duration as AsyncDuration};
 use tauri::{menu::{Menu, MenuItem}, tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}, AppHandle, Manager, State, WindowEvent};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
@@ -130,10 +132,26 @@ fn chrono_timestamp() -> i64 {
 async fn load_config(app: AppHandle) -> Result<AppConfig, String> {
     let path = get_config_path(&app);
     info!("Loading config from: {:?}", path);
-    
+
     if path.exists() {
         let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-        serde_json::from_str(&content).map_err(|e| e.to_string())
+        let mut config: AppConfig = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+
+        // Validate and fill defaults
+        if config.templates.is_empty() {
+            config.templates = AppConfig::default().templates;
+        }
+        if config.selected_template_id.is_empty() {
+            config.selected_template_id = "default".to_string();
+        }
+        if config.output_mode.is_empty() {
+            config.output_mode = "clipboard".to_string();
+        }
+        if config.selected_backend.is_empty() {
+            config.selected_backend = "minimax".to_string();
+        }
+
+        Ok(config)
     } else {
         Ok(AppConfig::default())
     }
@@ -226,14 +244,24 @@ async fn clear_history(state: State<'_, AppState>) -> Result<(), String> {
 async fn transform_text(text: String, system_prompt: String) -> Result<String, String> {
     info!("Transforming text: {}", &text[..text.len().min(50)]);
 
-    // Call mmx CLI for text generation
-    let output = Command::new("mmx")
-        .args(["text", "chat", "--system", &system_prompt, "--", &text])
-        .output()
-        .map_err(|e| {
+    let result = timeout(
+        AsyncDuration::from_secs(60),
+        AsyncCommand::new("mmx")
+            .args(["text", "chat", "--system", &system_prompt, "--", &text])
+            .output()
+    ).await;
+
+    let output = match result {
+        Ok(Ok(out)) => out,
+        Ok(Err(e)) => {
             error!("Failed to execute mmx: {}", e);
-            format!("执行失败: {}", e)
-        })?;
+            return Err(format!("执行失败: {}", e));
+        }
+        Err(_) => {
+            error!("mmx timed out after 60 seconds");
+            return Err("AI 处理超时（60秒），请重试".to_string());
+        }
+    };
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -241,9 +269,9 @@ async fn transform_text(text: String, system_prompt: String) -> Result<String, S
         return Err(format!("AI 调用失败: {}", stderr));
     }
 
-    let result = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    info!("Transform result: {}", &result[..result.len().min(50)]);
-    Ok(result)
+    let result_text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    info!("Transform result: {}", &result_text[..result_text.len().min(50)]);
+    Ok(result_text)
 }
 
 #[tauri::command]
@@ -272,6 +300,7 @@ pub fn run() {
             info!("Database path: {:?}", db_path);
             
             let conn = Connection::open(&db_path).expect("Failed to open database");
+            conn.busy_timeout(Duration::from_secs(5)).expect("Failed to set busy timeout");
             init_db(&conn).expect("Failed to initialize database");
             
             // Store state

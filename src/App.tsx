@@ -692,15 +692,6 @@ function App() {
                       className="w-full bg-gray-700 rounded-lg p-2 text-gray-100 outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="minimax">MiniMax (mmx CLI)</option>
-                      <option value="openai" disabled>
-                        OpenAI (待配置)
-                      </option>
-                      <option value="claude" disabled>
-                        Claude (待配置)
-                      </option>
-                      <option value="ollama" disabled>
-                        本地 Ollama (待配置)
-                      </option>
                     </select>
                   </div>
                 </>
