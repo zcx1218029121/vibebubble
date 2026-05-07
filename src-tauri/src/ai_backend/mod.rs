@@ -39,7 +39,7 @@ pub trait AIBackend: Send + Sync {
 pub struct ProviderProfile {
     pub id: String,
     pub name: String,
-    pub api_type: String,  // "anthropic" | "openai"
+    pub api_type: String,  // "anthropic" | "openai" | "minimax" | "ollama"
     pub base_url: String,
     pub api_key: String,
     pub model: String,
@@ -86,6 +86,18 @@ pub fn create_backend(selected_profile_id: &str, config: &BackendConfig) -> Resu
                 &profile.api_key,
                 &profile.base_url,
                 "bearer",
+                &profile.model,
+            )))
+        }
+        "minimax" => {
+            Ok(Box::new(minimax::MiniMaxBackend::new(
+                &profile.api_key,
+                &profile.model,
+            )))
+        }
+        "ollama" => {
+            Ok(Box::new(ollama::OllamaBackend::new(
+                &profile.base_url,
                 &profile.model,
             )))
         }

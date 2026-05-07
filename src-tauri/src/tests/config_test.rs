@@ -1,53 +1,101 @@
-// Config Module Tests
-// TDD: Write tests first, then implement
+// Config Module Tests - Updated for profile-based BackendConfig
 
-use crate::ai_backend::BackendConfig;
+use crate::ai_backend::{BackendConfig, ProviderProfile};
 
 #[test]
 fn test_backend_config_default() {
     let config = BackendConfig::default();
     
     // Verify default values
-    assert_eq!(config.minimax_model, "MiniMax-Text-01");
-    assert_eq!(config.openai_model, "gpt-4o-mini");
-    assert_eq!(config.claude_model, "claude-sonnet-4-20250514");
-    assert_eq!(config.ollama_host, "http://localhost:11434");
-    assert_eq!(config.ollama_model, "llama3.2");
+    assert!(config.profiles.is_empty());
+    assert!(config.selected_profile_id.is_empty());
+}
+
+#[test]
+fn test_backend_config_with_profiles() {
+    let profile = ProviderProfile {
+        id: "openai".to_string(),
+        name: "OpenAI".to_string(),
+        api_type: "openai".to_string(),
+        base_url: "https://api.openai.com/v1".to_string(),
+        api_key: "sk-test-key".to_string(),
+        model: "gpt-4o-mini".to_string(),
+    };
     
-    // API keys should be empty by default
-    assert!(config.minimax_api_key.is_empty());
-    assert!(config.openai_api_key.is_empty());
-    assert!(config.claude_api_key.is_empty());
+    let config = BackendConfig {
+        profiles: vec![profile],
+        selected_profile_id: "openai".to_string(),
+    };
+    
+    assert_eq!(config.profiles.len(), 1);
+    assert_eq!(config.selected_profile_id, "openai");
+    assert_eq!(config.profiles[0].api_key, "sk-test-key");
+    assert_eq!(config.profiles[0].model, "gpt-4o-mini");
 }
 
 #[test]
 fn test_backend_config_clone() {
-    let config = BackendConfig::default();
+    let profile = ProviderProfile {
+        id: "claude".to_string(),
+        name: "Claude".to_string(),
+        api_type: "anthropic".to_string(),
+        base_url: "https://api.anthropic.com".to_string(),
+        api_key: "sk-ant-test".to_string(),
+        model: "claude-sonnet-4-20250514".to_string(),
+    };
+    
+    let config = BackendConfig {
+        profiles: vec![profile.clone()],
+        selected_profile_id: "claude".to_string(),
+    };
     let cloned = config.clone();
     
-    assert_eq!(cloned.minimax_model, config.minimax_model);
-    assert_eq!(cloned.openai_model, config.openai_model);
+    assert_eq!(cloned.profiles.len(), 1);
+    assert_eq!(cloned.selected_profile_id, "claude");
+    assert_eq!(cloned.profiles[0].api_key, config.profiles[0].api_key);
 }
 
 #[test]
 fn test_backend_config_serialize() {
-    let config = BackendConfig::default();
-    let json = serde_json::to_string(&config).unwrap();
+    let profile = ProviderProfile {
+        id: "openai".to_string(),
+        name: "OpenAI".to_string(),
+        api_type: "openai".to_string(),
+        base_url: "https://api.openai.com/v1".to_string(),
+        api_key: "sk-test".to_string(),
+        model: "gpt-4o-mini".to_string(),
+    };
     
-    // Should be able to deserialize back
+    let config = BackendConfig {
+        profiles: vec![profile],
+        selected_profile_id: "openai".to_string(),
+    };
+    
+    let json = serde_json::to_string(&config).unwrap();
     let deserialized: BackendConfig = serde_json::from_str(&json).unwrap();
-    assert_eq!(deserialized.minimax_model, config.minimax_model);
+    
+    assert_eq!(deserialized.profiles.len(), 1);
+    assert_eq!(deserialized.selected_profile_id, "openai");
+    assert_eq!(deserialized.profiles[0].api_key, "sk-test");
 }
 
 #[test]
-fn test_backend_config_with_api_keys() {
-    let mut config = BackendConfig::default();
-    config.openai_api_key = "sk-test-key".to_string();
-    config.claude_api_key = "sk-ant-test-key".to_string();
+fn test_provider_profile_fields() {
+    let profile = ProviderProfile {
+        id: "test".to_string(),
+        name: "Test Provider".to_string(),
+        api_type: "openai".to_string(),
+        base_url: "https://custom.api.com/v1".to_string(),
+        api_key: "key".to_string(),
+        model: "gpt-4".to_string(),
+    };
     
-    assert!(!config.openai_api_key.is_empty());
-    assert!(!config.claude_api_key.is_empty());
-    assert_eq!(config.openai_api_key, "sk-test-key");
+    assert_eq!(profile.id, "test");
+    assert_eq!(profile.name, "Test Provider");
+    assert_eq!(profile.api_type, "openai");
+    assert_eq!(profile.base_url, "https://custom.api.com/v1");
+    assert_eq!(profile.api_key, "key");
+    assert_eq!(profile.model, "gpt-4");
 }
 
 // AppConfig tests
@@ -64,7 +112,6 @@ fn test_app_config_default() {
     // Default values check
     assert_eq!(config.selected_template_id, "default");
     assert_eq!(config.output_mode, "clipboard");
-    assert_eq!(config.selected_backend, "minimax");
 }
 
 #[test]
@@ -84,7 +131,6 @@ fn test_app_config_serialize_roundtrip() {
     let json = serde_json::to_string(&config).unwrap();
     let deserialized: AppConfig = serde_json::from_str(&json).unwrap();
     
-    assert_eq!(deserialized.selected_backend, config.selected_backend);
     assert_eq!(deserialized.selected_template_id, config.selected_template_id);
     assert_eq!(deserialized.templates.len(), config.templates.len());
 }
