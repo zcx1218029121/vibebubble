@@ -9,8 +9,7 @@ const DEFAULT_CONFIG: AppConfig = {
   templates: PRESET_TEMPLATES,
   selected_template_id: "default",
   output_mode: "clipboard",
-  selected_backend: "minimax",
-  backends: DEFAULT_BACKEND_CONFIG,
+  backend: DEFAULT_BACKEND_CONFIG,
 };
 
 export function useConfig() {
@@ -27,7 +26,7 @@ export function useConfig() {
           ...cfg,
           templates: PRESET_TEMPLATES,
           selected_template_id: cfg.selected_template_id || "default",
-          backends: cfg.backends || DEFAULT_BACKEND_CONFIG,
+          backend: cfg.backend || DEFAULT_BACKEND_CONFIG,
         });
       }
     } catch (err) {

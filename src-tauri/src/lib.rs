@@ -3,7 +3,7 @@ mod tests;
 
 mod ai_backend;
 
-use ai_backend::{BackendConfig, AIError, create_backend};
+use ai_backend::{AIError, create_backend};
 use log::{error, info, warn};
 use rusqlite::{Connection, Result as SqlResult};
 use serde::{Deserialize, Serialize};
@@ -30,10 +30,8 @@ pub struct AppConfig {
     pub selected_template_id: String,
     #[serde(rename = "output_mode")]
     pub output_mode: String,
-    #[serde(rename = "selected_backend")]
-    pub selected_backend: String,
-    #[serde(default = "BackendConfig::default")]
-    pub backends: BackendConfig,
+    #[serde(rename = "backend")]
+    pub backend: ai_backend::BackendConfig,
 }
 
 impl Default for AppConfig {
@@ -47,8 +45,7 @@ impl Default for AppConfig {
             }],
             selected_template_id: "default".to_string(),
             output_mode: "clipboard".to_string(),
-            selected_backend: "minimax".to_string(),
-            backends: BackendConfig::default(),
+            backend: ai_backend::BackendConfig::default(),
         }
     }
 }
@@ -251,7 +248,8 @@ async fn transform_text(app: AppHandle, text: String, system_prompt: String) -> 
 
     // Load config to determine which backend to use
     let config = load_config_inner(&app)?;
-    let backend_name = config.selected_backend.clone();
+    let selected_profile_id = config.backend.selected_profile_id.clone();
+    let backend_name = selected_profile_id.clone();
     let template_name = config.templates.iter()
         .find(|t| t.id == config.selected_template_id)
         .map(|t| t.name.clone())
@@ -259,7 +257,7 @@ async fn transform_text(app: AppHandle, text: String, system_prompt: String) -> 
 
     info!("[{}] Request start: template={}", backend_name, template_name);
 
-    let backend = create_backend(&backend_name, &config.backends)
+    let backend = create_backend(&selected_profile_id, &config.backend)
         .map_err(|e| e.to_string())?;
 
     let result = tokio::time::timeout(
@@ -315,24 +313,11 @@ fn load_config_inner(app: &AppHandle) -> Result<AppConfig, String> {
         if config.output_mode.is_empty() {
             config.output_mode = defaults.output_mode;
         }
-        if config.selected_backend.is_empty() {
-            config.selected_backend = defaults.selected_backend;
-        }
-        let bd = &defaults.backends;
-        if config.backends.minimax_model.is_empty() {
-            config.backends.minimax_model = bd.minimax_model.clone();
-        }
-        if config.backends.openai_model.is_empty() {
-            config.backends.openai_model = bd.openai_model.clone();
-        }
-        if config.backends.claude_model.is_empty() {
-            config.backends.claude_model = bd.claude_model.clone();
-        }
-        if config.backends.ollama_host.is_empty() {
-            config.backends.ollama_host = bd.ollama_host.clone();
-        }
-        if config.backends.ollama_model.is_empty() {
-            config.backends.ollama_model = bd.ollama_model.clone();
+        // Use backend from config, or default if not present
+        let default_backend = ai_backend::BackendConfig::default();
+        if config.backend.profiles.is_empty() && config.backend.selected_profile_id.is_empty() {
+            // Try to migrate from old backends format or use defaults
+            config.backend = default_backend;
         }
 
         Ok(config)
