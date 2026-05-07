@@ -1,9 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import type { AppConfig, PromptTemplate, HistoryItem } from "./types";
 import { PRESET_TEMPLATES, DEFAULT_BACKEND_CONFIG } from "./types";
+import { formatTime } from "./utils";
+import { useConfig } from "./hooks/useConfig";
+import { useHistory } from "./hooks/useHistory";
+import { useClipboard } from "./hooks/useClipboard";
+import { useToast } from "./hooks/useToast";
 
 const DEFAULT_TEMPLATE: PromptTemplate = PRESET_TEMPLATES[0];
 
@@ -396,21 +400,18 @@ function App() {
   const [output, setOutput] = useState("");
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [settingsTab, setSettingsTab] = useState<"general" | "templates" | "history">("templates");
-  const [config, setConfig] = useState<AppConfig>({
-    templates: PRESET_TEMPLATES,
-    selected_template_id: "default",
-    output_mode: "clipboard",
-    selected_backend: "minimax",
-    backends: DEFAULT_BACKEND_CONFIG,
-  });
-  const [history, setHistory] = useState<HistoryItem[]>([]);
   const [editingTemplate, setEditingTemplate] = useState<PromptTemplate | null>(null);
   const [isNewTemplate, setIsNewTemplate] = useState(false);
   const [historyExpanded, setHistoryExpanded] = useState<number | null>(null);
   const configLoaded = useRef(false);
+
+  // Use existing hooks instead of inline state management
+  const { config, setConfig, loadConfig, saveConfig, getCurrentTemplate } = useConfig();
+  const { history, deleteHistoryItem, clearHistory, loadHistory } = useHistory();
+  const { toast, showToast, hideToast } = useToast();
+  const { copyToClipboard } = useClipboard();
 
   // Detect window type on mount
   useEffect(() => {
@@ -426,13 +427,13 @@ function App() {
     detectWindowType();
   }, []);
 
-  // Load config and history on mount
+  // Load config and history on mount (only once)
   useEffect(() => {
     if (configLoaded.current) return;
     configLoaded.current = true;
     loadConfig();
     loadHistory();
-  }, []);
+  }, [loadConfig, loadHistory]);
 
   // Reload config when window gains focus (to catch changes from settings window)
   useEffect(() => {
@@ -449,63 +450,14 @@ function App() {
     return () => {
       unlistenPromise.then((unlisten) => unlisten());
     };
-  }, [windowType]);
+  }, [windowType, loadConfig, loadHistory]);
 
-  const loadConfig = async () => {
-    try {
-      const cfg = await invoke<AppConfig>("load_config");
-      if (cfg.templates && cfg.templates.length > 0) {
-        setConfig(cfg);
-      } else {
-        setConfig({
-          ...cfg,
-          templates: PRESET_TEMPLATES,
-          selected_template_id: cfg.selected_template_id || "default",
-        });
-      }
-    } catch (err) {
-      console.error("Failed to load config:", err);
-      setConfig({
-        templates: PRESET_TEMPLATES,
-        selected_template_id: "default",
-        output_mode: "clipboard",
-        selected_backend: "minimax",
-        backends: DEFAULT_BACKEND_CONFIG,
-      });
-    }
-  };
-
-  const loadHistory = async () => {
-    try {
-      const items = await invoke<HistoryItem[]>("get_history", { limit: 100 });
-      setHistory(items);
-    } catch (err) {
-      console.error("Failed to load history:", err);
-    }
-  };
-
-  const saveConfig = async (newConfig?: AppConfig) => {
-    try {
-      await invoke("save_config", { config: newConfig || config });
-      if (newConfig === undefined) {
-        // Only close settings if called without explicit config (i.e., from Save button)
-        setShowSettings(false);
-        setEditingTemplate(null);
-      }
-    } catch (err) {
-      console.error("Failed to save config:", err);
-    }
-  };
-
-  const getCurrentTemplate = () => {
-    return config.templates.find((t) => t.id === config.selected_template_id) || DEFAULT_TEMPLATE;
-  };
+  // loadConfig, loadHistory, saveConfig, getCurrentTemplate are provided by useConfig/useHistory hooks
 
   const handleSubmit = async () => {
     if (!input.trim()) return;
     setLoading(true);
     setOutput("");
-    setCopied(false);
 
     try {
       const template = getCurrentTemplate();
@@ -521,36 +473,21 @@ function App() {
         output: result,
         templateName: template.name,
       });
-      
+
       // Reload history
       await loadHistory();
 
       if (config.output_mode === "clipboard") {
-        try {
-          await writeText(result);
+        const success = await copyToClipboard(result);
+        if (success) {
           setCopied(true);
-          setToast("已复制到剪贴板");
-        } catch (clipErr) {
-          console.warn("Tauri clipboard failed, trying fallback:", clipErr);
-          try {
-            const textarea = document.createElement("textarea");
-            textarea.value = result;
-            textarea.style.position = "fixed";
-            textarea.style.opacity = "0";
-            document.body.appendChild(textarea);
-            textarea.select();
-            document.execCommand("copy");
-            document.body.removeChild(textarea);
-            setCopied(true);
-            setToast("已复制到剪贴板");
-          } catch (fallbackErr) {
-            console.error("剪贴板写入失败:", fallbackErr);
-            setToast("复制失败");
-          }
+          showToast("已复制到剪贴板");
+        } else {
+          showToast("复制失败");
         }
         setTimeout(() => {
           setCopied(false);
-          setToast(null);
+          hideToast();
         }, 2000);
       }
     } catch (err) {
@@ -561,33 +498,16 @@ function App() {
   };
 
   const handleCopy = async (text: string) => {
-    try {
-      // Try Tauri clipboard plugin first
-      await writeText(text);
+    const success = await copyToClipboard(text);
+    if (success) {
       setCopied(true);
-      setToast("已复制到剪贴板");
-    } catch (err) {
-      console.warn("Tauri clipboard failed, trying fallback:", err);
-      // Fallback: create temporary textarea
-      try {
-        const textarea = document.createElement("textarea");
-        textarea.value = text;
-        textarea.style.position = "fixed";
-        textarea.style.opacity = "0";
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand("copy");
-        document.body.removeChild(textarea);
-        setCopied(true);
-        setToast("已复制到剪贴板");
-      } catch (fallbackErr) {
-        console.error("复制失败:", fallbackErr);
-        setToast("复制失败");
-      }
+      showToast("已复制到剪贴板");
+    } else {
+      showToast("复制失败");
     }
     setTimeout(() => {
       setCopied(false);
-      setToast(null);
+      hideToast();
     }, 2000);
   };
 
@@ -595,25 +515,6 @@ function App() {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
-    }
-  };
-
-  // History functions
-  const deleteHistoryItem = async (id: number) => {
-    try {
-      await invoke("delete_history_item", { id });
-      setHistory(history.filter((h) => h.id !== id));
-    } catch (err) {
-      console.error("Failed to delete history item:", err);
-    }
-  };
-
-  const clearHistory = async () => {
-    try {
-      await invoke("clear_history");
-      setHistory([]);
-    } catch (err) {
-      console.error("Failed to clear history:", err);
     }
   };
 
@@ -642,7 +543,9 @@ function App() {
     const newTemplates = config.templates.filter((t) => t.id !== id);
     const newSelectedId =
       config.selected_template_id === id ? newTemplates[0].id : config.selected_template_id;
-    setConfig({ ...config, templates: newTemplates, selected_template_id: newSelectedId });
+    const newConfig = { ...config, templates: newTemplates, selected_template_id: newSelectedId };
+    setConfig(newConfig);
+    saveConfig(newConfig);
   };
 
   const saveTemplate = () => {
@@ -669,21 +572,6 @@ function App() {
   const cancelEditTemplate = () => {
     setEditingTemplate(null);
     setIsNewTemplate(false);
-  };
-
-  const formatTime = (timestamp: number) => {
-    const d = new Date(timestamp);
-    const now = new Date();
-    const diffMs = now.getTime() - d.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 1) return "刚刚";
-    if (diffMins < 60) return `${diffMins} 分钟前`;
-    if (diffHours < 24) return `${diffHours} 小时前`;
-    if (diffDays < 7) return `${diffDays} 天前`;
-    return d.toLocaleDateString("zh-CN", { month: "short", day: "numeric" });
   };
 
   // If this is the settings window, only render settings
