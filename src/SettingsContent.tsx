@@ -1,16 +1,108 @@
 import { useState } from "react";
-import type { PromptTemplate, HistoryItem } from "./types";
+import type { PromptTemplate, HistoryItem, BackendConfig } from "./types";
 import { formatTime } from "./utils";
 import { useConfig } from "./hooks/useConfig";
 import { useHistory } from "./hooks/useHistory";
 import { useToast } from "./hooks/useToast";
+
+// 默认填充配置
+const DEFAULT_CONFIGS: Record<string, Partial<BackendConfig>> = {
+  minimax: {
+    minimax_model: "MiniMax-Text-01",
+  },
+  openai: {
+    openai_model: "gpt-4o-mini",
+  },
+  claude: {
+    claude_model: "claude-sonnet-4-20250514",
+  },
+  ollama: {
+    ollama_host: "http://localhost:11434",
+    ollama_model: "llama3.2",
+  },
+};
+
+interface ProviderConfigProps {
+  backend: string;
+  config: BackendConfig;
+  onUpdate: (updates: Partial<BackendConfig>) => void;
+  onFillDefaults: () => void;
+}
+
+function ProviderConfig({ backend, config, onUpdate, onFillDefaults }: ProviderConfigProps) {
+  const fields: Record<string, { label: string; key: keyof BackendConfig; placeholder: string; isSecret?: boolean }[]> = {
+    minimax: [
+      { label: "API Key", key: "minimax_api_key", placeholder: "eyJh...", isSecret: true },
+      { label: "模型", key: "minimax_model", placeholder: "MiniMax-Text-01" },
+    ],
+    openai: [
+      { label: "API Key", key: "openai_api_key", placeholder: "sk-...", isSecret: true },
+      { label: "模型", key: "openai_model", placeholder: "gpt-4o-mini" },
+    ],
+    claude: [
+      { label: "API Key", key: "claude_api_key", placeholder: "sk-ant-...", isSecret: true },
+      { label: "模型", key: "claude_model", placeholder: "claude-sonnet-4-20250514" },
+    ],
+    ollama: [
+      { label: "Host", key: "ollama_host", placeholder: "http://localhost:11434" },
+      { label: "模型", key: "ollama_model", placeholder: "llama3.2" },
+    ],
+  };
+
+  const labels: Record<string, string> = {
+    minimax: "MiniMax",
+    openai: "OpenAI",
+    claude: "Claude",
+    ollama: "Ollama",
+  };
+
+  const currentFields = fields[backend] || [];
+
+  return (
+    <div className="p-4 rounded-lg bg-gray-700/30 border border-gray-700">
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="font-medium text-gray-200">{labels[backend] || backend}</h4>
+        <button
+          onClick={onFillDefaults}
+          className="text-xs px-2 py-1 bg-blue-600/50 hover:bg-blue-600 rounded transition-colors"
+        >
+          默认填充
+        </button>
+      </div>
+      <div className="space-y-3">
+        {currentFields.map((field) => (
+          <div key={field.key}>
+            <label className="block text-xs text-gray-400 mb-1">{field.label}</label>
+            {field.isSecret ? (
+              <input
+                type="password"
+                value={config[field.key] || ""}
+                onChange={(e) => onUpdate({ [field.key]: e.target.value })}
+                placeholder={field.placeholder}
+                className="w-full bg-gray-600 rounded-lg p-2 text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            ) : (
+              <input
+                type="text"
+                value={config[field.key] || ""}
+                onChange={(e) => onUpdate({ [field.key]: e.target.value })}
+                placeholder={field.placeholder}
+                className="w-full bg-gray-600 rounded-lg p-2 text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export function SettingsContent() {
   const { config, setConfig, saveConfig } = useConfig();
   const { history } = useHistory();
   const { toast, showToast } = useToast();
 
-  const [settingsTab, setSettingsTab] = useState<"general" | "templates" | "history">("general");
+  const [settingsTab, setSettingsTab] = useState<"general" | "templates" | "history" | "providers">("general");
   const [selectedHistory, setSelectedHistory] = useState<HistoryItem | null>(null);
   const [editingTemplate, setEditingTemplate] = useState<PromptTemplate | null>(null);
   const [isNewTemplate, setIsNewTemplate] = useState(false);
@@ -35,6 +127,14 @@ export function SettingsContent() {
             }`}
           >
             通用
+          </button>
+          <button
+            onClick={() => setSettingsTab("providers")}
+            className={`px-4 py-2 text-sm font-medium transition-colors ${
+              settingsTab === "providers" ? "text-blue-400 border-b-2 border-blue-400" : "text-gray-400 hover:text-gray-200"
+            }`}
+          >
+            服务商
           </button>
           <button
             onClick={() => setSettingsTab("templates")}
@@ -83,6 +183,43 @@ export function SettingsContent() {
             >
               保存
             </button>
+          </div>
+        )}
+
+        {settingsTab === "providers" && (
+          <div className="space-y-4">
+            <ProviderConfig
+              backend="minimax"
+              config={config.backends}
+              onUpdate={(updates) => setConfig({ ...config, backends: { ...config.backends, ...updates } })}
+              onFillDefaults={() => setConfig({ ...config, backends: { ...config.backends, ...DEFAULT_CONFIGS.minimax } })}
+            />
+            <ProviderConfig
+              backend="openai"
+              config={config.backends}
+              onUpdate={(updates) => setConfig({ ...config, backends: { ...config.backends, ...updates } })}
+              onFillDefaults={() => setConfig({ ...config, backends: { ...config.backends, ...DEFAULT_CONFIGS.openai } })}
+            />
+            <ProviderConfig
+              backend="claude"
+              config={config.backends}
+              onUpdate={(updates) => setConfig({ ...config, backends: { ...config.backends, ...updates } })}
+              onFillDefaults={() => setConfig({ ...config, backends: { ...config.backends, ...DEFAULT_CONFIGS.claude } })}
+            />
+            <ProviderConfig
+              backend="ollama"
+              config={config.backends}
+              onUpdate={(updates) => setConfig({ ...config, backends: { ...config.backends, ...updates } })}
+              onFillDefaults={() => setConfig({ ...config, backends: { ...config.backends, ...DEFAULT_CONFIGS.ollama } })}
+            />
+            <div className="flex justify-end">
+              <button
+                onClick={() => { saveConfig(); showToast("服务商配置已保存"); }}
+                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+              >
+                保存全部
+              </button>
+            </div>
           </div>
         )}
 
