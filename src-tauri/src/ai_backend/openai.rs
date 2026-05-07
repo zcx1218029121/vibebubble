@@ -3,6 +3,8 @@ use crate::ai_backend::{AIBackend, AIError};
 /// OpenAI backend — uses OpenAI Chat Completions API
 pub struct OpenAIBackend {
     api_key: String,
+    base_url: String,
+    auth_style: String,
     model: String,
 }
 
@@ -10,7 +12,34 @@ impl OpenAIBackend {
     pub fn new(api_key: &str, model: &str) -> Self {
         Self {
             api_key: api_key.to_string(),
+            base_url: String::new(),
+            auth_style: "bearer".to_string(),
             model: model.to_string(),
+        }
+    }
+
+    pub fn with_base_url(api_key: &str, base_url: &str, auth_style: &str, model: &str) -> Self {
+        Self {
+            api_key: api_key.to_string(),
+            base_url: base_url.to_string(),
+            auth_style: auth_style.to_string(),
+            model: model.to_string(),
+        }
+    }
+
+    fn get_url(&self) -> String {
+        if self.base_url.is_empty() {
+            "https://api.openai.com/v1/chat/completions".to_string()
+        } else {
+            format!("{}/chat/completions", self.base_url.trim_end_matches('/'))
+        }
+    }
+
+    fn get_auth_header(&self) -> (&str, String) {
+        if self.auth_style == "api_key" {
+            ("x-api-key", self.api_key.clone())
+        } else {
+            ("authorization", format!("Bearer {}", self.api_key))
         }
     }
 }
@@ -32,9 +61,11 @@ impl AIBackend for OpenAIBackend {
             ]
         });
 
+        let (header_name, header_value) = self.get_auth_header();
+        
         let response = client
-            .post("https://api.openai.com/v1/chat/completions")
-            .header("Authorization", format!("Bearer {}", self.api_key))
+            .post(self.get_url())
+            .header(header_name, header_value)
             .header("Content-Type", "application/json")
             .json(&body)
             .send()

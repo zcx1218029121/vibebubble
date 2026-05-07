@@ -45,10 +45,18 @@ pub struct BackendConfig {
     pub minimax_model: String,
     /// OpenAI API Key
     pub openai_api_key: String,
+    /// OpenAI base URL (defaults to api.openai.com/v1 if empty)
+    pub openai_base_url: String,
+    /// OpenAI auth style: "bearer" (Authorization: Bearer) or "api_key" (X-API-Key)
+    pub openai_auth_style: String,
     /// OpenAI model name
     pub openai_model: String,
     /// Claude API Key
     pub claude_api_key: String,
+    /// Claude base URL (defaults to api.anthropic.com if empty)
+    pub claude_base_url: String,
+    /// Claude auth style: "api_key" (x-api-key header) - standard for Claude
+    pub claude_auth_style: String,
     /// Claude model name
     pub claude_model: String,
     /// Ollama host URL
@@ -63,8 +71,12 @@ impl Default for BackendConfig {
             minimax_api_key: String::new(),
             minimax_model: "MiniMax-Text-01".to_string(),
             openai_api_key: String::new(),
+            openai_base_url: String::new(),
+            openai_auth_style: "bearer".to_string(),
             openai_model: "gpt-4o-mini".to_string(),
             claude_api_key: String::new(),
+            claude_base_url: String::new(),
+            claude_auth_style: "api_key".to_string(),
             claude_model: "claude-sonnet-4-20250514".to_string(),
             ollama_host: "http://localhost:11434".to_string(),
             ollama_model: "llama3.2".to_string(),
@@ -83,8 +95,10 @@ pub fn create_backend(selected: &str, config: &BackendConfig) -> Result<Box<dyn 
             if config.openai_api_key.is_empty() {
                 return Err(AIError::Auth("OpenAI API Key 未配置".to_string()));
             }
-            Ok(Box::new(openai::OpenAIBackend::new(
+            Ok(Box::new(openai::OpenAIBackend::with_base_url(
                 &config.openai_api_key,
+                &config.openai_base_url,
+                &config.openai_auth_style,
                 &config.openai_model,
             )))
         }
@@ -92,8 +106,10 @@ pub fn create_backend(selected: &str, config: &BackendConfig) -> Result<Box<dyn 
             if config.claude_api_key.is_empty() {
                 return Err(AIError::Auth("Claude API Key 未配置".to_string()));
             }
-            Ok(Box::new(claude::ClaudeBackend::new(
+            Ok(Box::new(claude::ClaudeBackend::with_base_url(
                 &config.claude_api_key,
+                &config.claude_base_url,
+                &config.claude_auth_style,
                 &config.claude_model,
             )))
         }

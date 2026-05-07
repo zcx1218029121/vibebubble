@@ -3,6 +3,8 @@ use crate::ai_backend::{AIBackend, AIError};
 /// Claude backend — uses Anthropic Messages API
 pub struct ClaudeBackend {
     api_key: String,
+    base_url: String,
+    auth_style: String,
     model: String,
 }
 
@@ -10,7 +12,34 @@ impl ClaudeBackend {
     pub fn new(api_key: &str, model: &str) -> Self {
         Self {
             api_key: api_key.to_string(),
+            base_url: String::new(),
+            auth_style: "api_key".to_string(),
             model: model.to_string(),
+        }
+    }
+
+    pub fn with_base_url(api_key: &str, base_url: &str, auth_style: &str, model: &str) -> Self {
+        Self {
+            api_key: api_key.to_string(),
+            base_url: base_url.to_string(),
+            auth_style: auth_style.to_string(),
+            model: model.to_string(),
+        }
+    }
+
+    fn get_url(&self) -> String {
+        if self.base_url.is_empty() {
+            "https://api.anthropic.com/v1/messages".to_string()
+        } else {
+            format!("{}/messages", self.base_url.trim_end_matches('/'))
+        }
+    }
+
+    fn get_auth_header(&self) -> (&str, String) {
+        if self.auth_style == "bearer" {
+            ("authorization", format!("Bearer {}", self.api_key))
+        } else {
+            ("x-api-key", self.api_key.clone())
         }
     }
 }
@@ -33,12 +62,21 @@ impl AIBackend for ClaudeBackend {
             ]
         });
 
-        let response = client
-            .post("https://api.anthropic.com/v1/messages")
-            .header("x-api-key", &self.api_key)
+        let (header_name, header_value) = self.get_auth_header();
+        
+        let mut request = client
+            .post(self.get_url())
+            .header(header_name, header_value)
             .header("anthropic-version", "2023-06-01")
             .header("Content-Type", "application/json")
-            .json(&body)
+            .json(&body);
+
+        // Only add anthropic-version header for official API
+        if self.base_url.is_empty() {
+            request = request.header("anthropic-version", "2023-06-01");
+        }
+
+        let response = request
             .send()
             .await
             .map_err(|e| AIError::Network(e.to_string()))?;
