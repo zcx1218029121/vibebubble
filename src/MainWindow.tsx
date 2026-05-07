@@ -2,12 +2,12 @@ import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { PromptTemplate, HistoryItem } from "./types";
-import { formatTime } from "./utils";
 import { useConfig } from "./hooks/useConfig";
 import { useHistory } from "./hooks/useHistory";
 import { useClipboard } from "./hooks/useClipboard";
 import { useToast } from "./hooks/useToast";
 import { TemplateEditor } from "./components/TemplateEditor";
+import { HistoryList } from "./components/HistoryList";
 
 export function MainWindow() {
   const [input, setInput] = useState("");
@@ -18,7 +18,6 @@ export function MainWindow() {
   const [settingsTab, setSettingsTab] = useState<"general" | "templates" | "history">("templates");
   const [editingTemplate, setEditingTemplate] = useState<PromptTemplate | null>(null);
   const [isNewTemplate, setIsNewTemplate] = useState(false);
-  const [historyExpanded, setHistoryExpanded] = useState<number | null>(null);
   const configLoaded = useRef(false);
 
   const { config, setConfig, loadConfig, saveConfig, getCurrentTemplate } = useConfig();
@@ -400,99 +399,11 @@ export function MainWindow() {
               )}
 
               {settingsTab === "history" && (
-                <>
-                  {history.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">
-                      <p className="text-4xl mb-2">📭</p>
-                      <p>暂无历史记录</p>
-                      <p className="text-xs mt-1">转换后的内容会保存在这里（SQLite）</p>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="flex justify-between items-center mb-3">
-                        <span className="text-sm text-gray-400">
-                          共 {history.length} 条记录（保留 1000 条 / 30 天）
-                        </span>
-                        <button
-                          onClick={clearHistory}
-                          className="text-xs px-2 py-1 bg-red-600/50 hover:bg-red-600 rounded transition-colors"
-                        >
-                          清空全部
-                        </button>
-                      </div>
-                      <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                        {history.map((item) => (
-                          <div
-                            key={item.id}
-                            className="bg-gray-700/30 rounded-lg border border-gray-700 overflow-hidden"
-                          >
-                            {/* History Header */}
-                            <div
-                              className="p-2 flex items-center justify-between cursor-pointer hover:bg-gray-700/50"
-                              onClick={() =>
-                                setHistoryExpanded(
-                                  historyExpanded === item.id ? null : item.id
-                                )
-                              }
-                            >
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs text-gray-500">
-                                  {formatTime(item.timestamp)}
-                                </span>
-                                <span className="text-xs px-2 py-0.5 bg-blue-600/30 text-blue-300 rounded">
-                                  {item.template_name}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleCopy(item.output_preview);
-                                  }}
-                                  className="text-xs px-2 py-1 bg-gray-600 hover:bg-gray-500 rounded transition-colors"
-                                >
-                                  复制
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    deleteHistoryItem(item.id);
-                                  }}
-                                  className="text-xs px-2 py-1 bg-red-600/50 hover:bg-red-600 rounded transition-colors"
-                                >
-                                  删除
-                                </button>
-                                <span className="text-gray-500 text-xs">
-                                  {historyExpanded === item.id ? "▲" : "▼"}
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* History Content */}
-                            {historyExpanded === item.id && (
-                              <div className="px-3 pb-3 space-y-2 border-t border-gray-700/50">
-                                {/* Input Preview */}
-                                <div className="mt-2">
-                                  <span className="text-xs text-gray-500">输入：</span>
-                                  <p className="text-xs text-gray-300 mt-1 line-clamp-2">
-                                    {item.input}
-                                  </p>
-                                </div>
-                                {/* Output Preview */}
-                                <div>
-                                  <span className="text-xs text-gray-500">输出：</span>
-                                  <p className="text-xs text-gray-300 mt-1 whitespace-pre-wrap">
-                                    {item.output_preview}
-                                  </p>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </>
+                <HistoryList
+                  history={history}
+                  onDelete={deleteHistoryItem}
+                  onClear={clearHistory}
+                />
               )}
 
               {settingsTab === "general" && (
