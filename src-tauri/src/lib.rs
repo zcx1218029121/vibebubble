@@ -57,6 +57,7 @@ impl Default for AppConfig {
 pub struct HistoryItem {
     pub id: i64,
     pub input: String,
+    pub output: String,
     pub output_preview: String,
     pub template_name: String,
     pub timestamp: i64,
@@ -217,7 +218,8 @@ async fn add_history(
     
     Ok(HistoryItem {
         id,
-        input,
+        input: input.clone(),
+        output: output.clone(),
         output_preview: {
             let chars: Vec<char> = output.chars().collect();
             if chars.len() > MAX_OUTPUT_PREVIEW {
@@ -254,6 +256,7 @@ async fn get_history(state: State<'_, AppState>, limit: Option<usize>) -> Result
             Ok(HistoryItem {
                 id: row.get(0)?,
                 input: row.get(1)?,
+                output: output.clone(),
                 output_preview,
                 template_name: row.get(3)?,
                 timestamp: row.get(4)?,

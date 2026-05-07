@@ -10,6 +10,7 @@ export interface PromptTemplate {
 export interface HistoryItem {
   id: number;
   input: string;
+  output: string;
   output_preview: string;
   template_name: string;
   timestamp: number;
