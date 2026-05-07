@@ -1,0 +1,24 @@
+[package]
+name = "vibebubble"
+version = "0.1.0"
+description = "VibeBubble - Vibe Coding Assistant"
+authors = ["you"]
+edition = "2021"
+
+[lib]
+name = "vibebubble_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-opener = "2"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-clipboard-manager = "2"
+tauri-plugin-log = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+log = "0.4"
+rusqlite = { version = "0.32", features = ["bundled"] }
