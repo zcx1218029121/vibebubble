@@ -444,10 +444,10 @@ function App() {
     };
 
     const win = getCurrentWindow();
-    win.onFocusChanged(handleFocus);
+    const unlistenPromise = win.onFocusChanged(handleFocus);
 
     return () => {
-      // cleanup if needed
+      unlistenPromise.then((unlisten) => unlisten());
     };
   }, [windowType]);
 
@@ -484,11 +484,14 @@ function App() {
     }
   };
 
-  const saveConfig = async () => {
+  const saveConfig = async (newConfig?: AppConfig) => {
     try {
-      await invoke("save_config", { config });
-      setShowSettings(false);
-      setEditingTemplate(null);
+      await invoke("save_config", { config: newConfig || config });
+      if (newConfig === undefined) {
+        // Only close settings if called without explicit config (i.e., from Save button)
+        setShowSettings(false);
+        setEditingTemplate(null);
+      }
     } catch (err) {
       console.error("Failed to save config:", err);
     }
@@ -738,9 +741,11 @@ function App() {
       <div className="mb-3 flex-shrink-0">
         <select
           value={config.selected_template_id}
-          onChange={(e) =>
-            setConfig({ ...config, selected_template_id: e.target.value })
-          }
+          onChange={(e) => {
+            const newConfig = { ...config, selected_template_id: e.target.value };
+            setConfig(newConfig);
+            saveConfig(newConfig);
+          }}
           className="w-full bg-gray-800 rounded-lg p-2 text-gray-100 outline-none focus:ring-2 focus:ring-blue-500 text-sm"
         >
           {config.templates.map((t) => (
@@ -1083,9 +1088,11 @@ function App() {
                     </label>
                     <select
                       value={config.output_mode}
-                      onChange={(e) =>
-                        setConfig({ ...config, output_mode: e.target.value })
-                      }
+                      onChange={(e) => {
+                        const newConfig = { ...config, output_mode: e.target.value };
+                        setConfig(newConfig);
+                        saveConfig(newConfig);
+                      }}
                       className="w-full bg-gray-700 rounded-lg p-2 text-gray-100 outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="clipboard">剪贴板（转换后自动复制）</option>
@@ -1100,9 +1107,11 @@ function App() {
                     </label>
                     <select
                       value={config.selected_backend}
-                      onChange={(e) =>
-                        setConfig({ ...config, selected_backend: e.target.value })
-                      }
+                      onChange={(e) => {
+                        const newConfig = { ...config, selected_backend: e.target.value };
+                        setConfig(newConfig);
+                        saveConfig(newConfig);
+                      }}
                       className="w-full bg-gray-700 rounded-lg p-2 text-gray-100 outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="minimax">MiniMax</option>
@@ -1120,7 +1129,11 @@ function App() {
                         <input
                           type="password"
                           value={config.backends?.minimax_api_key || ""}
-                          onChange={(e) => setConfig({ ...config, backends: { ...config.backends, minimax_api_key: e.target.value } })}
+                          onChange={(e) => {
+                            const newConfig = { ...config, backends: { ...config.backends, minimax_api_key: e.target.value } };
+                            setConfig(newConfig);
+                            saveConfig(newConfig);
+                          }}
                           placeholder="输入 MiniMax API Key"
                           className="w-full bg-gray-700 rounded-lg p-2 text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500"
                         />
@@ -1130,7 +1143,11 @@ function App() {
                         <input
                           type="text"
                           value={config.backends?.minimax_model || ""}
-                          onChange={(e) => setConfig({ ...config, backends: { ...config.backends, minimax_model: e.target.value } })}
+                          onChange={(e) => {
+                            const newConfig = { ...config, backends: { ...config.backends, minimax_model: e.target.value } };
+                            setConfig(newConfig);
+                            saveConfig(newConfig);
+                          }}
                           placeholder="MiniMax-Text-01"
                           className="w-full bg-gray-700 rounded-lg p-2 text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500"
                         />
@@ -1146,7 +1163,11 @@ function App() {
                         <input
                           type="password"
                           value={config.backends?.openai_api_key || ""}
-                          onChange={(e) => setConfig({ ...config, backends: { ...config.backends, openai_api_key: e.target.value } })}
+                          onChange={(e) => {
+                            const newConfig = { ...config, backends: { ...config.backends, openai_api_key: e.target.value } };
+                            setConfig(newConfig);
+                            saveConfig(newConfig);
+                          }}
                           placeholder="sk-..."
                           className="w-full bg-gray-700 rounded-lg p-2 text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500"
                         />
@@ -1156,7 +1177,11 @@ function App() {
                         <input
                           type="text"
                           value={config.backends?.openai_model || ""}
-                          onChange={(e) => setConfig({ ...config, backends: { ...config.backends, openai_model: e.target.value } })}
+                          onChange={(e) => {
+                            const newConfig = { ...config, backends: { ...config.backends, openai_model: e.target.value } };
+                            setConfig(newConfig);
+                            saveConfig(newConfig);
+                          }}
                           placeholder="gpt-4o-mini"
                           className="w-full bg-gray-700 rounded-lg p-2 text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500"
                         />
@@ -1172,7 +1197,11 @@ function App() {
                         <input
                           type="password"
                           value={config.backends?.claude_api_key || ""}
-                          onChange={(e) => setConfig({ ...config, backends: { ...config.backends, claude_api_key: e.target.value } })}
+                          onChange={(e) => {
+                            const newConfig = { ...config, backends: { ...config.backends, claude_api_key: e.target.value } };
+                            setConfig(newConfig);
+                            saveConfig(newConfig);
+                          }}
                           placeholder="sk-ant-..."
                           className="w-full bg-gray-700 rounded-lg p-2 text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500"
                         />
@@ -1182,7 +1211,11 @@ function App() {
                         <input
                           type="text"
                           value={config.backends?.claude_model || ""}
-                          onChange={(e) => setConfig({ ...config, backends: { ...config.backends, claude_model: e.target.value } })}
+                          onChange={(e) => {
+                            const newConfig = { ...config, backends: { ...config.backends, claude_model: e.target.value } };
+                            setConfig(newConfig);
+                            saveConfig(newConfig);
+                          }}
                           placeholder="claude-sonnet-4-20250514"
                           className="w-full bg-gray-700 rounded-lg p-2 text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500"
                         />
@@ -1198,7 +1231,11 @@ function App() {
                         <input
                           type="text"
                           value={config.backends?.ollama_host || ""}
-                          onChange={(e) => setConfig({ ...config, backends: { ...config.backends, ollama_host: e.target.value } })}
+                          onChange={(e) => {
+                            const newConfig = { ...config, backends: { ...config.backends, ollama_host: e.target.value } };
+                            setConfig(newConfig);
+                            saveConfig(newConfig);
+                          }}
                           placeholder="http://localhost:11434"
                           className="w-full bg-gray-700 rounded-lg p-2 text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500"
                         />
@@ -1208,7 +1245,11 @@ function App() {
                         <input
                           type="text"
                           value={config.backends?.ollama_model || ""}
-                          onChange={(e) => setConfig({ ...config, backends: { ...config.backends, ollama_model: e.target.value } })}
+                          onChange={(e) => {
+                            const newConfig = { ...config, backends: { ...config.backends, ollama_model: e.target.value } };
+                            setConfig(newConfig);
+                            saveConfig(newConfig);
+                          }}
                           placeholder="llama3.2"
                           className="w-full bg-gray-700 rounded-lg p-2 text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500"
                         />
