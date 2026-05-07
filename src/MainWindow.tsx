@@ -554,12 +554,12 @@ export function MainWindow() {
                   {config.selected_backend === "ollama" && (
                     <div className="space-y-3 mt-3">
                       <div>
-                        <label className="block text-xs font-medium text-gray-400 mb-1">Ollama 地址</label>
+                        <label className="block text-xs font-medium text-gray-400 mb-1">Ollama Base URL</label>
                         <input
                           type="text"
-                          value={config.backends?.ollama_host || ""}
+                          value={config.backends?.ollama_base_url || ""}
                           onChange={(e) => {
-                            const newConfig = { ...config, backends: { ...config.backends, ollama_host: e.target.value } };
+                            const newConfig = { ...config, backends: { ...config.backends, ollama_base_url: e.target.value } };
                             setConfig(newConfig);
                             saveConfig(newConfig);
                           }}

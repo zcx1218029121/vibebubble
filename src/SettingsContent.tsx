@@ -8,16 +8,19 @@ import { useToast } from "./hooks/useToast";
 // 默认填充配置
 const DEFAULT_CONFIGS: Record<string, Partial<BackendConfig>> = {
   minimax: {
+    minimax_base_url: "https://api.minimax.chat",
     minimax_model: "MiniMax-Text-01",
   },
   openai: {
+    openai_base_url: "https://api.openai.com/v1",
     openai_model: "gpt-4o-mini",
   },
   claude: {
+    claude_base_url: "https://api.anthropic.com",
     claude_model: "claude-sonnet-4-20250514",
   },
   ollama: {
-    ollama_host: "http://localhost:11434",
+    ollama_base_url: "http://localhost:11434",
     ollama_model: "llama3.2",
   },
 };
@@ -32,19 +35,23 @@ interface ProviderConfigProps {
 function ProviderConfig({ backend, config, onUpdate, onFillDefaults }: ProviderConfigProps) {
   const fields: Record<string, { label: string; key: keyof BackendConfig; placeholder: string; isSecret?: boolean }[]> = {
     minimax: [
+      { label: "Base URL", key: "minimax_base_url", placeholder: "https://api.minimax.chat" },
       { label: "API Key", key: "minimax_api_key", placeholder: "eyJh...", isSecret: true },
       { label: "模型", key: "minimax_model", placeholder: "MiniMax-Text-01" },
     ],
     openai: [
+      { label: "Base URL", key: "openai_base_url", placeholder: "https://api.openai.com/v1" },
       { label: "API Key", key: "openai_api_key", placeholder: "sk-...", isSecret: true },
       { label: "模型", key: "openai_model", placeholder: "gpt-4o-mini" },
     ],
     claude: [
+      { label: "Base URL", key: "claude_base_url", placeholder: "https://api.anthropic.com" },
       { label: "API Key", key: "claude_api_key", placeholder: "sk-ant-...", isSecret: true },
       { label: "模型", key: "claude_model", placeholder: "claude-sonnet-4-20250514" },
     ],
     ollama: [
-      { label: "Host", key: "ollama_host", placeholder: "http://localhost:11434" },
+      { label: "Base URL", key: "ollama_base_url", placeholder: "http://localhost:11434" },
+      { label: "API Key", key: "ollama_api_key", placeholder: "(可选)", isSecret: true },
       { label: "模型", key: "ollama_model", placeholder: "llama3.2" },
     ],
   };
@@ -174,7 +181,18 @@ export function SettingsContent() {
                 onChange={(e) => setConfig({ ...config, selected_backend: e.target.value })}
                 className="w-full bg-gray-700 rounded-lg p-2 text-gray-100 outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="minimax">MiniMax</option>
+                <option value="minimax/{config.backends.minimax_model}">
+                  MiniMax - {config.backends.minimax_model || "未配置"}
+                </option>
+                <option value="openai/{config.backends.openai_model}">
+                  OpenAI - {config.backends.openai_model || "未配置"}
+                </option>
+                <option value="claude/{config.backends.claude_model}">
+                  Claude - {config.backends.claude_model || "未配置"}
+                </option>
+                <option value="ollama/{config.backends.ollama_model}">
+                  Ollama - {config.backends.ollama_model || "未配置"}
+                </option>
               </select>
             </div>
             <button

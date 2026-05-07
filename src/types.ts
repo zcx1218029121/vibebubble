@@ -17,24 +17,32 @@ export interface HistoryItem {
 }
 
 export interface BackendConfig {
+  minimax_base_url: string;
   minimax_api_key: string;
   minimax_model: string;
+  openai_base_url: string;
   openai_api_key: string;
   openai_model: string;
+  claude_base_url: string;
   claude_api_key: string;
   claude_model: string;
-  ollama_host: string;
+  ollama_base_url: string;
+  ollama_api_key: string;
   ollama_model: string;
 }
 
 export const DEFAULT_BACKEND_CONFIG: BackendConfig = {
+  minimax_base_url: "https://api.minimax.chat",
   minimax_api_key: "",
   minimax_model: "MiniMax-Text-01",
+  openai_base_url: "https://api.openai.com/v1",
   openai_api_key: "",
   openai_model: "gpt-4o-mini",
+  claude_base_url: "https://api.anthropic.com",
   claude_api_key: "",
   claude_model: "claude-sonnet-4-20250514",
-  ollama_host: "http://localhost:11434",
+  ollama_base_url: "http://localhost:11434",
+  ollama_api_key: "",
   ollama_model: "llama3.2",
 };
 
