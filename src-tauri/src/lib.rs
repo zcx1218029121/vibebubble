@@ -140,49 +140,8 @@ fn chrono_timestamp() -> i64 {
 
 #[tauri::command]
 async fn load_config(app: AppHandle) -> Result<AppConfig, String> {
-    let path = get_config_path(&app);
-    info!("Loading config from: {:?}", path);
-
-    if path.exists() {
-        let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-        let mut config: AppConfig = serde_json::from_str(&content).map_err(|e| e.to_string())?;
-
-        // Validate and fill defaults
-        let defaults = AppConfig::default();
-        if config.templates.is_empty() {
-            config.templates = defaults.templates;
-        }
-        if config.selected_template_id.is_empty() {
-            config.selected_template_id = defaults.selected_template_id;
-        }
-        if config.output_mode.is_empty() {
-            config.output_mode = defaults.output_mode;
-        }
-        if config.selected_backend.is_empty() {
-            config.selected_backend = defaults.selected_backend;
-        }
-        // Fill missing backend config fields with defaults
-        let bd = &defaults.backends;
-        if config.backends.minimax_model.is_empty() {
-            config.backends.minimax_model = bd.minimax_model.clone();
-        }
-        if config.backends.openai_model.is_empty() {
-            config.backends.openai_model = bd.openai_model.clone();
-        }
-        if config.backends.claude_model.is_empty() {
-            config.backends.claude_model = bd.claude_model.clone();
-        }
-        if config.backends.ollama_host.is_empty() {
-            config.backends.ollama_host = bd.ollama_host.clone();
-        }
-        if config.backends.ollama_model.is_empty() {
-            config.backends.ollama_model = bd.ollama_model.clone();
-        }
-
-        Ok(config)
-    } else {
-        Ok(AppConfig::default())
-    }
+    info!("Loading config from: {:?}", get_config_path(&app));
+    load_config_inner(&app)
 }
 
 #[tauri::command]

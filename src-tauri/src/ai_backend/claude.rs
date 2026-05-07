@@ -9,15 +9,6 @@ pub struct ClaudeBackend {
 }
 
 impl ClaudeBackend {
-    pub fn new(api_key: &str, model: &str) -> Self {
-        Self {
-            api_key: api_key.to_string(),
-            base_url: String::new(),
-            auth_style: "api_key".to_string(),
-            model: model.to_string(),
-        }
-    }
-
     pub fn with_base_url(api_key: &str, base_url: &str, auth_style: &str, model: &str) -> Self {
         Self {
             api_key: api_key.to_string(),

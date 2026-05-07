@@ -9,13 +9,13 @@ async fn test_minimax_backend_name() {
 
 #[tokio::test]
 async fn test_openai_backend_name() {
-    let backend = OpenAIBackend::new("test-key", "gpt-4o-mini");
+    let backend = OpenAIBackend::with_base_url("test-key", "", "bearer", "gpt-4o-mini");
     assert_eq!(backend.name(), "openai");
 }
 
 #[tokio::test]
 async fn test_claude_backend_name() {
-    let backend = ClaudeBackend::new("test-key", "claude-sonnet-4-20250514");
+    let backend = ClaudeBackend::with_base_url("test-key", "", "api_key", "claude-sonnet-4-20250514");
     assert_eq!(backend.name(), "claude");
 }
 

@@ -8,6 +8,8 @@ import { useConfig } from "./hooks/useConfig";
 import { useHistory } from "./hooks/useHistory";
 import { useClipboard } from "./hooks/useClipboard";
 import { useToast } from "./hooks/useToast";
+import { HistoryList } from "./components/HistoryList";
+import { TemplateEditor } from "./components/TemplateEditor";
 
 const DEFAULT_TEMPLATE: PromptTemplate = PRESET_TEMPLATES[0];
 
@@ -548,23 +550,24 @@ function App() {
     saveConfig(newConfig);
   };
 
-  const saveTemplate = () => {
-    if (!editingTemplate) return;
-
+  const handleSaveTemplate = (editedTemplate: PromptTemplate) => {
+    let newConfig;
     if (isNewTemplate) {
-      setConfig({
+      newConfig = {
         ...config,
-        templates: [...config.templates, editingTemplate],
-        selected_template_id: editingTemplate.id,
-      });
+        templates: [...config.templates, editedTemplate],
+        selected_template_id: editedTemplate.id,
+      };
     } else {
-      setConfig({
+      newConfig = {
         ...config,
         templates: config.templates.map((t) =>
-          t.id === editingTemplate.id ? editingTemplate : t
+          t.id === editedTemplate.id ? editedTemplate : t
         ),
-      });
+      };
     }
+    setConfig(newConfig);
+    saveConfig(newConfig);
     setEditingTemplate(null);
     setIsNewTemplate(false);
   };
@@ -807,68 +810,12 @@ function App() {
               )}
 
               {settingsTab === "templates" && editingTemplate && (
-                <>
-                  {/* Template Edit Form */}
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-1">
-                        模板名称
-                      </label>
-                      <input
-                        type="text"
-                        value={editingTemplate.name}
-                        onChange={(e) =>
-                          setEditingTemplate({ ...editingTemplate, name: e.target.value })
-                        }
-                        className="w-full bg-gray-700 rounded-lg p-2 text-gray-100 outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="如：想法→任务"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-1">
-                        描述
-                      </label>
-                      <input
-                        type="text"
-                        value={editingTemplate.description}
-                        onChange={(e) =>
-                          setEditingTemplate({ ...editingTemplate, description: e.target.value })
-                        }
-                        className="w-full bg-gray-700 rounded-lg p-2 text-gray-100 outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="这个模板的用途"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-1">
-                        提示词内容
-                      </label>
-                      <textarea
-                        value={editingTemplate.prompt}
-                        onChange={(e) =>
-                          setEditingTemplate({ ...editingTemplate, prompt: e.target.value })
-                        }
-                        className="w-full h-48 bg-gray-700 rounded-lg p-3 text-gray-100 text-sm resize-none outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="输入系统提示词..."
-                      />
-                    </div>
-                  </div>
-
-                  {/* Template Edit Actions */}
-                  <div className="mt-4 flex justify-end gap-2">
-                    <button
-                      onClick={cancelEditTemplate}
-                      className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
-                    >
-                      取消
-                    </button>
-                    <button
-                      onClick={saveTemplate}
-                      className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors"
-                    >
-                      {isNewTemplate ? "添加" : "保存"}
-                    </button>
-                  </div>
-                </>
+                <TemplateEditor
+                  template={editingTemplate}
+                  isNew={isNewTemplate}
+                  onSave={handleSaveTemplate}
+                  onCancel={cancelEditTemplate}
+                />
               )}
 
               {settingsTab === "history" && (
