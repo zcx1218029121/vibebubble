@@ -4,7 +4,7 @@ mod tests;
 mod ai_backend;
 
 use ai_backend::{BackendConfig, AIError, create_backend};
-use log::{error, info};
+use log::{error, info, warn};
 use rusqlite::{Connection, Result as SqlResult};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -247,40 +247,56 @@ async fn clear_history(state: State<'_, AppState>) -> Result<(), String> {
 
 #[tauri::command]
 async fn transform_text(app: AppHandle, text: String, system_prompt: String) -> Result<String, String> {
-    info!("Transforming text with backend routing: {}", text.chars().take(50).collect::<String>());
+    let start = std::time::Instant::now();
 
     // Load config to determine which backend to use
     let config = load_config_inner(&app)?;
-    let backend = create_backend(&config.selected_backend, &config.backends)
-        .map_err(|e| e.to_string())?;
+    let backend_name = config.selected_backend.clone();
+    let template_name = config.templates.iter()
+        .find(|t| t.id == config.selected_template_id)
+        .map(|t| t.name.clone())
+        .unwrap_or_else(|| "unknown".to_string());
 
-    info!("Using backend: {}", backend.name());
+    info!("[{}] Request start: template={}", backend_name, template_name);
+
+    let backend = create_backend(&backend_name, &config.backends)
+        .map_err(|e| e.to_string())?;
 
     let result = tokio::time::timeout(
         std::time::Duration::from_secs(60),
         backend.transform(&text, &system_prompt)
     ).await;
 
+    let latency_ms = start.elapsed().as_millis() as u64;
+
     match result {
         Ok(Ok(content)) => {
-            info!("Transform result: {}", content.chars().take(50).collect::<String>());
+            info!("[{}] Success: {}ms, output_len={}", backend.name(), latency_ms, content.len());
             Ok(content)
         }
         Ok(Err(AIError::Timeout)) => {
+            warn!("[{}] Timeout after {}ms", backend.name(), latency_ms);
             Err("AI 处理超时，请重试".to_string())
         }
         Ok(Err(AIError::RateLimit)) => {
+            warn!("[{}] Rate limit after {}ms", backend.name(), latency_ms);
             Err("请求频率超限，请稍后重试".to_string())
         }
         Ok(Err(AIError::Auth(msg))) => {
-            Err(format!("认证失败: {}", msg))
+            error!("[{}] Auth error after {}ms: {}", backend.name(), latency_ms, msg);
+            Err(format!("认证失败，请检查 API Key 是否正确"))
+        }
+        Ok(Err(AIError::Network(msg))) => {
+            error!("[{}] Network error after {}ms: {}", backend.name(), latency_ms, msg);
+            Err(format!("网络错误: {}", msg))
         }
         Ok(Err(e)) => {
+            error!("[{}] Error after {}ms: {}", backend.name(), latency_ms, e);
             Err(e.to_string())
         }
         Err(_) => {
-            error!("Backend transform timed out after 60 seconds");
-            Err(AIError::Timeout.to_string())
+            error!("[{}] Timeout after {}ms", backend.name(), latency_ms);
+            Err("AI 处理超时，请重试".to_string())
         }
     }
 }

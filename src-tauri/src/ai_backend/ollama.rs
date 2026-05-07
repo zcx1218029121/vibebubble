@@ -44,7 +44,13 @@ impl AIBackend for OllamaBackend {
 
         let status = response.status();
         if status != reqwest::StatusCode::OK {
-            return Err(AIError::Unknown(format!("Ollama 错误: HTTP {}", status)));
+            // Try to parse error message from response body
+            if let Ok(err_data) = response.json::<serde_json::Value>().await {
+                if let Some(err_msg) = err_data.get("error").and_then(|e| e.as_str()) {
+                    return Err(AIError::Unknown(format!("Ollama 错误: {}", err_msg)));
+                }
+            }
+            return Err(AIError::Unknown(format!("Ollama 请求失败 (HTTP {}): 请检查 Ollama 服务是否运行", status)));
         }
 
         let data: serde_json::Value = response
