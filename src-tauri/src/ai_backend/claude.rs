@@ -1,4 +1,4 @@
-use crate::ai_backend::{AIBackend, AIError};
+use crate::ai_backend::{send_chat_request, AIBackend, AIError};
 
 /// Claude backend — uses Anthropic Messages API
 pub struct ClaudeBackend {
@@ -26,11 +26,11 @@ impl ClaudeBackend {
         }
     }
 
-    fn get_auth_header(&self) -> (&str, String) {
-        if self.auth_style == "bearer" {
-            ("authorization", format!("Bearer {}", self.api_key))
-        } else {
+    fn auth_header(&self) -> (&str, String) {
+        if self.auth_style == "api_key" {
             ("x-api-key", self.api_key.clone())
+        } else {
+            ("authorization", format!("Bearer {}", self.api_key))
         }
     }
 }
@@ -42,8 +42,6 @@ impl AIBackend for ClaudeBackend {
     }
 
     async fn transform(&self, text: &str, system_prompt: &str) -> Result<String, AIError> {
-        let client = reqwest::Client::new();
-
         let body = serde_json::json!({
             "model": self.model,
             "max_tokens": 4096,
@@ -53,46 +51,21 @@ impl AIBackend for ClaudeBackend {
             ]
         });
 
-        let (header_name, header_value) = self.get_auth_header();
-        
-        let mut request = client
-            .post(self.get_url())
-            .header(header_name, header_value)
-            .header("anthropic-version", "2023-06-01")
-            .header("Content-Type", "application/json")
-            .json(&body);
-
-        // Only add anthropic-version header for official API
-        if self.base_url.is_empty() {
-            request = request.header("anthropic-version", "2023-06-01");
+        let mut url = self.get_url();
+        // Anthropic requires version header, add as query param for custom base_url
+        if !self.base_url.is_empty() {
+            url = format!("{}?anthropic-version=2023-06-01", url);
         }
 
-        let response = request
-            .send()
-            .await
-            .map_err(|e| AIError::Network(e.to_string()))?;
+        let (header_name, header_value) = self.auth_header();
+        let data = send_chat_request(
+            &url,
+            (header_name, header_value.as_str()),
+            body,
+        )
+        .await?;
 
-        let status = response.status();
-        if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
-            return Err(AIError::RateLimit);
-        }
-        if status == reqwest::StatusCode::UNAUTHORIZED {
-            return Err(AIError::Auth("Claude API Key 无效".to_string()));
-        }
-
-        let data: serde_json::Value = response
-            .json()
-            .await
-            .map_err(|e| AIError::Network(e.to_string()))?;
-
-        if status != reqwest::StatusCode::OK {
-            let err_msg = data["error"]["message"]
-                .as_str()
-                .unwrap_or("未知错误");
-            return Err(AIError::Unknown(format!("Claude API 错误: {}", err_msg)));
-        }
-
-        // Claude returns: {"content": [{"type": "text", "text": "..."}]}
+        // Parse: {"content": [{"type": "text", "text": "..."}]}
         let mut extracted = String::new();
         if let Some(content) = data["content"].as_array() {
             for item in content {

@@ -31,3 +31,26 @@ body {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
+
+/* iOS Frosted Glass Container */
+.ios-glass {
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-radius: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+/* Rainbow Border Animation for Convert Button */
+@keyframes rainbow-border {
+  0%   { border-color: #a855f7; box-shadow: 0 0 8px #a855f7, inset 0 0 8px rgba(168, 85, 247, 0.1); }
+  25%  { border-color: #3b82f6; box-shadow: 0 0 8px #3b82f6, inset 0 0 8px rgba(59, 130, 246, 0.1); }
+  50%  { border-color: #22c55e; box-shadow: 0 0 8px #22c55e, inset 0 0 8px rgba(34, 197, 94, 0.1); }
+  75%  { border-color: #f59e0b; box-shadow: 0 0 8px #f59e0b, inset 0 0 8px rgba(245, 158, 11, 0.1); }
+  100% { border-color: #a855f7; box-shadow: 0 0 8px #a855f7, inset 0 0 8px rgba(168, 85, 247, 0.1); }
+}
+
+.btn-convert.loading {
+  animation: rainbow-border 1.5s ease-in-out infinite;
+  background: rgba(255, 255, 255, 0.1);
+}

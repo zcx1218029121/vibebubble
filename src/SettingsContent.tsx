@@ -1,8 +1,6 @@
 import { useState } from "react";
-import type { PromptTemplate, HistoryItem, ProviderProfile, ApiType, BackendConfig } from "./types";
-import { formatTime } from "./utils";
+import type { ProviderProfile, ApiType } from "./types";
 import { useConfig } from "./hooks/useConfig";
-import { useHistory } from "./hooks/useHistory";
 import { useToast } from "./hooks/useToast";
 import { API_TYPE_DEFAULTS } from "./types";
 
@@ -169,7 +167,6 @@ function ProfileCard({ profile, isSelected, onSelect, onEdit, onDelete }: Profil
 
 export function SettingsContent() {
   const { config, setConfig, saveConfig } = useConfig();
-  const { history } = useHistory();
   const { toast, showToast } = useToast();
   const [settingsTab, setSettingsTab] = useState<"general" | "providers" | "templates" | "history">("general");
   const [editingProfile, setEditingProfile] = useState<ProviderProfile | null | "new">(null);

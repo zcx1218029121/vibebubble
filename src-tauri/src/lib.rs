@@ -5,9 +5,11 @@ mod ai_backend;
 
 use ai_backend::{AIError, create_backend};
 use log::{error, info, warn};
+use nix::fcntl::{flock, FlockArg};
 use rusqlite::{Connection, Result as SqlResult};
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::os::unix::io::AsRawFd;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -24,6 +26,8 @@ pub struct PromptTemplate {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AppConfig {
+    #[serde(rename = "version")]
+    pub version: u32,
     #[serde(rename = "templates")]
     pub templates: Vec<PromptTemplate>,
     #[serde(rename = "selected_template_id")]
@@ -37,6 +41,7 @@ pub struct AppConfig {
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
+            version: 1,
             templates: vec![PromptTemplate {
                 id: "default".to_string(),
                 name: "想法→任务".to_string(),
@@ -144,10 +149,30 @@ async fn load_config(app: AppHandle) -> Result<AppConfig, String> {
 #[tauri::command]
 async fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String> {
     let path = get_config_path(&app);
+    let lock_path = path.with_extension("lock");
     info!("Saving config to: {:?}", path);
-    
+
+    // Acquire file lock
+    let lock_file = fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .open(&lock_path)
+        .map_err(|e| format!("无法创建锁文件: {}", e))?;
+
+    flock(
+        lock_file.as_raw_fd(),
+        FlockArg::LockExclusive,
+    ).map_err(|e| format!("无法锁定配置: {}", e))?;
+
+    // Write to temp file then rename (atomic on POSIX)
+    let temp_path = path.with_extension("tmp");
     let content = serde_json::to_string_pretty(&config).map_err(|e| e.to_string())?;
-    fs::write(&path, content).map_err(|e| e.to_string())
+    fs::write(&temp_path, &content).map_err(|e| format!("写入临时文件失败: {}", e))?;
+
+    std::fs::rename(&temp_path, &path).map_err(|e| format!("原子替换失败: {}", e))?;
+
+    info!("Config saved successfully");
+    Ok(())
 }
 
 #[tauri::command]
@@ -242,23 +267,29 @@ async fn clear_history(state: State<'_, AppState>) -> Result<(), String> {
     Ok(())
 }
 
+/// Get backend instance from app config — encapsulates config loading + backend creation
+fn get_backend(app: &AppHandle) -> Result<(Box<dyn ai_backend::AIBackend>, String), String> {
+    let config = load_config_inner(app)?;
+    let selected_id = config.backend.selected_profile_id.clone();
+
+    let backend = create_backend(&selected_id, &config.backend)
+        .map_err(|e| e.to_string())?;
+
+    let profile_name = config.backend.profiles.iter()
+        .find(|p| p.id == selected_id)
+        .map(|p| p.name.clone())
+        .unwrap_or_else(|| "unknown".to_string());
+
+    Ok((backend, profile_name))
+}
+
 #[tauri::command]
 async fn transform_text(app: AppHandle, text: String, system_prompt: String) -> Result<String, String> {
     let start = std::time::Instant::now();
 
-    // Load config to determine which backend to use
-    let config = load_config_inner(&app)?;
-    let selected_profile_id = config.backend.selected_profile_id.clone();
-    let backend_name = selected_profile_id.clone();
-    let template_name = config.templates.iter()
-        .find(|t| t.id == config.selected_template_id)
-        .map(|t| t.name.clone())
-        .unwrap_or_else(|| "unknown".to_string());
+    let (backend, backend_name) = get_backend(&app)?;
 
-    info!("[{}] Request start: template={}", backend_name, template_name);
-
-    let backend = create_backend(&selected_profile_id, &config.backend)
-        .map_err(|e| e.to_string())?;
+    info!("[{}] Request start", backend_name);
 
     let result = tokio::time::timeout(
         std::time::Duration::from_secs(60),
@@ -278,7 +309,7 @@ async fn transform_text(app: AppHandle, text: String, system_prompt: String) -> 
         }
         Ok(Err(AIError::Auth(msg))) => {
             error!("[{}] Auth error after {}ms: {}", backend.name(), latency_ms, msg);
-            Err(format!("认证失败，请检查 API Key 是否正确"))
+            Err("认证失败，请检查 API Key 是否正确".to_string())
         }
         Ok(Err(AIError::Network(msg))) => {
             error!("[{}] Network error after {}ms: {}", backend.name(), latency_ms, msg);
@@ -304,6 +335,12 @@ fn load_config_inner(app: &AppHandle) -> Result<AppConfig, String> {
 
         // Validate and fill defaults
         let defaults = AppConfig::default();
+
+        // Migration: set version if missing (defaults to 0)
+        if config.version == 0 {
+            config.version = 1;
+        }
+
         if config.templates.is_empty() {
             config.templates = defaults.templates;
         }
