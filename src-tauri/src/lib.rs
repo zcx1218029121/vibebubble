@@ -26,7 +26,7 @@ pub struct PromptTemplate {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AppConfig {
-    #[serde(rename = "version")]
+    #[serde(rename = "version", default)]
     pub version: u32,
     #[serde(rename = "templates")]
     pub templates: Vec<PromptTemplate>,
