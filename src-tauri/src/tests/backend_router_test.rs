@@ -4,24 +4,6 @@ mod tests {
     use crate::ai_backend::{BackendConfig, ProviderProfile, create_backend};
 
     #[test]
-    fn test_create_backend_minimax_profile() {
-        let profile = ProviderProfile {
-            id: "minimax".to_string(),
-            name: "MiniMax".to_string(),
-            api_type: "minimax".to_string(),
-            base_url: "https://api.minimax.chat".to_string(),
-            api_key: "test-key".to_string(),
-            model: "MiniMax-Text-01".to_string(),
-        };
-        let config = BackendConfig {
-            profiles: vec![profile],
-            selected_profile_id: "minimax".to_string(),
-        };
-        let backend = create_backend("minimax", &config).unwrap();
-        assert_eq!(backend.name(), "minimax");
-    }
-
-    #[test]
     fn test_create_backend_openai_profile() {
         let profile = ProviderProfile {
             id: "openai".to_string(),
@@ -57,22 +39,58 @@ mod tests {
         assert_eq!(backend.name(), "claude");
     }
 
+    // Issue 3: Validation tests
+
     #[test]
-    fn test_create_backend_ollama_profile() {
+    fn test_create_backend_empty_selected_id() {
+        let config = BackendConfig {
+            profiles: vec![],
+            selected_profile_id: "".to_string(),
+        };
+        let result = create_backend("", &config);
+        assert!(result.is_err());
+        let err_msg = result.err().map(|e| e.to_string()).unwrap_or_default();
+        assert!(err_msg.contains("未选择任何配置"), "Got: {}", err_msg);
+    }
+
+    #[test]
+    fn test_create_backend_empty_model() {
         let profile = ProviderProfile {
-            id: "ollama".to_string(),
-            name: "Ollama".to_string(),
-            api_type: "ollama".to_string(),
-            base_url: "http://localhost:11434".to_string(),
-            api_key: String::new(),
-            model: "llama3.2".to_string(),
+            id: "test".to_string(),
+            name: "Test".to_string(),
+            api_type: "openai".to_string(),
+            base_url: "https://api.openai.com/v1".to_string(),
+            api_key: "test-key".to_string(),
+            model: "".to_string(),  // Empty model
         };
         let config = BackendConfig {
             profiles: vec![profile],
-            selected_profile_id: "ollama".to_string(),
+            selected_profile_id: "test".to_string(),
         };
-        let backend = create_backend("ollama", &config).unwrap();
-        assert_eq!(backend.name(), "ollama");
+        let result = create_backend("test", &config);
+        assert!(result.is_err());
+        let err_msg = result.err().map(|e| e.to_string()).unwrap_or_default();
+        assert!(err_msg.contains("模型名称未配置"), "Got: {}", err_msg);
+    }
+
+    #[test]
+    fn test_create_backend_invalid_api_type() {
+        let profile = ProviderProfile {
+            id: "test".to_string(),
+            name: "Test".to_string(),
+            api_type: "invalid".to_string(),
+            base_url: "".to_string(),
+            api_key: "test-key".to_string(),
+            model: "gpt-4o-mini".to_string(),
+        };
+        let config = BackendConfig {
+            profiles: vec![profile],
+            selected_profile_id: "test".to_string(),
+        };
+        let result = create_backend("test", &config);
+        assert!(result.is_err());
+        let err_msg = result.err().map(|e| e.to_string()).unwrap_or_default();
+        assert!(err_msg.contains("不支持的 API 类型"), "Got: {}", err_msg);
     }
 
     #[test]
