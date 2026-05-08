@@ -25,6 +25,7 @@ export interface ProviderProfile {
   base_url: string;
   api_key: string;
   model: string;
+  is_full_url?: boolean;  // true = base_url is complete, don't append path
 }
 
 export interface BackendConfig {

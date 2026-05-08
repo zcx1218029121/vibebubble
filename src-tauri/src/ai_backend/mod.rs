@@ -50,17 +50,26 @@ pub async fn send_chat_request(
         return Err(AIError::Auth("API Key 无效或无权限".to_string()));
     }
 
-    let data: serde_json::Value = response
-        .json()
-        .await
-        .map_err(|e| AIError::Network(e.to_string()))?;
+    // Try to parse JSON, but if it fails, get raw text for debugging
+    let data = match response.json::<serde_json::Value>().await {
+        Ok(data) => data,
+        Err(_) => {
+            return Err(AIError::Unknown(format!(
+                "API 返回错误 (HTTP {}). 请检查 base_url 配置是否正确",
+                status
+            )));
+        }
+    };
 
     if status != reqwest::StatusCode::OK {
         let err_msg = data["error"]["message"]
             .as_str()
             .or_else(|| data["error"]["type"].as_str())
             .unwrap_or("未知错误");
-        return Err(AIError::Unknown(format!("API 错误: {}", err_msg)));
+        return Err(AIError::Unknown(format!(
+            "API 错误 (HTTP {}): {}. 请检查 API Key 和 base_url 是否正确",
+            status, err_msg
+        )));
     }
 
     Ok(data)
@@ -78,10 +87,13 @@ pub trait AIBackend: Send + Sync {
 pub struct ProviderProfile {
     pub id: String,
     pub name: String,
-    pub api_type: String,  // "anthropic" | "openai" | "minimax" | "ollama"
+    pub api_type: String,  // "anthropic" | "openai"
+    #[serde(default)]
     pub base_url: String,
     pub api_key: String,
     pub model: String,
+    #[serde(default)]
+    pub is_full_url: bool,  // true = base_url is complete URL, don't append path
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -133,6 +145,7 @@ pub fn create_backend(selected_profile_id: &str, config: &BackendConfig) -> Resu
                 &profile.base_url,
                 "api_key",
                 &profile.model,
+                profile.is_full_url,
             )))
         }
         "openai" => {
@@ -144,6 +157,7 @@ pub fn create_backend(selected_profile_id: &str, config: &BackendConfig) -> Resu
                 &profile.base_url,
                 "bearer",
                 &profile.model,
+                profile.is_full_url,
             )))
         }
         _ => unreachable!(),

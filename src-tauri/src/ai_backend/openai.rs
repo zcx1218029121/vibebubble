@@ -5,20 +5,24 @@ pub struct OpenAIBackend {
     api_key: String,
     base_url: String,
     model: String,
+    is_full_url: bool,
 }
 
 impl OpenAIBackend {
-    pub fn with_base_url(api_key: &str, base_url: &str, _auth_style: &str, model: &str) -> Self {
+    pub fn with_base_url(api_key: &str, base_url: &str, _auth_style: &str, model: &str, is_full_url: bool) -> Self {
         Self {
             api_key: api_key.to_string(),
             base_url: base_url.to_string(),
             model: model.to_string(),
+            is_full_url,
         }
     }
 
     fn get_url(&self) -> String {
         if self.base_url.is_empty() {
             "https://api.openai.com/v1/chat/completions".to_string()
+        } else if self.is_full_url {
+            self.base_url.trim_end_matches('/').to_string()
         } else {
             format!("{}/chat/completions", self.base_url.trim_end_matches('/'))
         }

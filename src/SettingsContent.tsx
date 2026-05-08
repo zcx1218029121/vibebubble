@@ -26,6 +26,7 @@ function ProfileForm({ profile, onSave, onCancel }: ProfileFormProps) {
   const [baseUrl, setBaseUrl] = useState(profile?.base_url || API_TYPE_DEFAULTS.openai.base_url);
   const [apiKey, setApiKey] = useState(profile?.api_key || "");
   const [model, setModel] = useState(profile?.model || API_TYPE_DEFAULTS.openai.model);
+  const [isFullUrl, setIsFullUrl] = useState(profile?.is_full_url || false);
 
   const handleTypeChange = (newType: ApiType) => {
     setApiType(newType);
@@ -49,6 +50,7 @@ function ProfileForm({ profile, onSave, onCancel }: ProfileFormProps) {
       base_url: baseUrl.trim(),
       api_key: apiKey.trim(),
       model: model.trim(),
+      is_full_url: isFullUrl,
     });
   };
 
@@ -84,6 +86,18 @@ function ProfileForm({ profile, onSave, onCancel }: ProfileFormProps) {
           placeholder="https://api.openai.com/v1"
           className="w-full bg-gray-600 rounded-lg p-2 text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500"
         />
+      </div>
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="isFullUrl"
+          checked={isFullUrl}
+          onChange={(e) => setIsFullUrl(e.target.checked)}
+          className="w-4 h-4 rounded bg-gray-600 border-gray-500"
+        />
+        <label htmlFor="isFullUrl" className="text-xs text-gray-400">
+          完整 URL（不拼接路径）
+        </label>
       </div>
       <div>
         <label className="block text-xs text-gray-400 mb-1">API Key</label>

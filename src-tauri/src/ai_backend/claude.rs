@@ -6,21 +6,25 @@ pub struct ClaudeBackend {
     base_url: String,
     auth_style: String,
     model: String,
+    is_full_url: bool,
 }
 
 impl ClaudeBackend {
-    pub fn with_base_url(api_key: &str, base_url: &str, auth_style: &str, model: &str) -> Self {
+    pub fn with_base_url(api_key: &str, base_url: &str, auth_style: &str, model: &str, is_full_url: bool) -> Self {
         Self {
             api_key: api_key.to_string(),
             base_url: base_url.to_string(),
             auth_style: auth_style.to_string(),
             model: model.to_string(),
+            is_full_url,
         }
     }
 
     fn get_url(&self) -> String {
         if self.base_url.is_empty() {
             "https://api.anthropic.com/v1/messages".to_string()
+        } else if self.is_full_url {
+            self.base_url.trim_end_matches('/').to_string()
         } else {
             format!("{}/messages", self.base_url.trim_end_matches('/'))
         }
@@ -53,7 +57,7 @@ impl AIBackend for ClaudeBackend {
 
         let mut url = self.get_url();
         // Anthropic requires version header, add as query param for custom base_url
-        if !self.base_url.is_empty() {
+        if !self.base_url.is_empty() && !self.is_full_url {
             url = format!("{}?anthropic-version=2023-06-01", url);
         }
 
