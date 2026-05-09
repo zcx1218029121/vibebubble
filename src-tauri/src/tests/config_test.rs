@@ -172,16 +172,15 @@ fn test_history_item_structure() {
     let item = HistoryItem {
         id: 1,
         input: "Test input".to_string(),
-        output: "Test output".to_string(),
-        output_preview: "Test output preview".to_string(),
+        // output is no longer stored in history
+        output_preview: "Test input preview".to_string(),
         template_name: "default".to_string(),
         timestamp: 1234567890,
     };
     
     assert_eq!(item.id, 1);
     assert_eq!(item.input, "Test input");
-    assert_eq!(item.output, "Test output");
-    assert_eq!(item.output_preview, "Test output preview");
+    assert_eq!(item.output_preview, "Test input preview");
     assert_eq!(item.template_name, "default");
     assert_eq!(item.timestamp, 1234567890);
 }
@@ -193,8 +192,8 @@ fn test_history_item_serialize() {
     let item = HistoryItem {
         id: 1,
         input: "Test input".to_string(),
-        output: "Test output".to_string(),
-        output_preview: "Test output preview".to_string(),
+        // output is no longer stored in history
+        output_preview: "Test input preview".to_string(),
         template_name: "default".to_string(),
         timestamp: 1234567890,
     };
@@ -204,7 +203,7 @@ fn test_history_item_serialize() {
     
     assert_eq!(deserialized.id, item.id);
     assert_eq!(deserialized.input, item.input);
-    assert_eq!(deserialized.output, item.output);
+    assert_eq!(deserialized.output_preview, item.output_preview);
 }
 
 // PromptTemplate tests

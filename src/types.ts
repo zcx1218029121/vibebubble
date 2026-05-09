@@ -10,8 +10,8 @@ export interface PromptTemplate {
 export interface HistoryItem {
   id: number;
   input: string;
-  output: string;
-  output_preview: string;
+  // output is NOT stored - returned directly from transform, user can copy it
+  output_preview: string; // preview derived from input
   template_name: string;
   timestamp: number;
 }

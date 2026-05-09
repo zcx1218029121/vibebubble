@@ -59,7 +59,8 @@ impl Default for AppConfig {
 pub struct HistoryItem {
     pub id: i64,
     pub input: String,
-    pub output: String,
+    // output is NOT stored in history - it's returned directly and user can copy it
+    // we only store a preview for display purposes
     pub output_preview: String,
     pub template_name: String,
     pub timestamp: i64,
@@ -189,15 +190,15 @@ async fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String> {
 async fn add_history(
     state: State<'_, AppState>,
     input: String,
-    output: String,
+    output_preview: String, // Only store preview, not full output
     template_name: String,
 ) -> Result<HistoryItem, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     let timestamp = chrono_timestamp();
     
     conn.execute(
-        "INSERT INTO history (input, output, template_name, timestamp) VALUES (?, ?, ?, ?)",
-        rusqlite::params![input, output, template_name, timestamp],
+        "INSERT INTO history (input, output_preview, template_name, timestamp) VALUES (?, ?, ?, ?)",
+        rusqlite::params![input, truncate_output(&output_preview), template_name, timestamp],
     ).map_err(|e| e.to_string())?;
     
     let id = conn.last_insert_rowid();
@@ -210,8 +211,7 @@ async fn add_history(
     Ok(HistoryItem {
         id,
         input: input.clone(),
-        output: output.clone(),
-        output_preview: truncate_output(&output),
+        output_preview: truncate_output(&output_preview),
         template_name,
         timestamp,
     })
@@ -223,17 +223,17 @@ async fn get_history(state: State<'_, AppState>, limit: Option<usize>) -> Result
     let limit = limit.unwrap_or(100);
 
     let mut stmt = conn
-        .prepare("SELECT id, input, output, template_name, timestamp FROM history ORDER BY timestamp DESC LIMIT ?")
+        .prepare("SELECT id, input, output_preview, template_name, timestamp FROM history ORDER BY timestamp DESC LIMIT ?")
         .map_err(|e| e.to_string())?;
 
     let rows = stmt
         .query_map([limit as i64], |row| {
-            let output: String = row.get(2)?;
+            let input: String = row.get(1)?;
+            let output_preview: String = row.get(2)?;
             Ok(HistoryItem {
                 id: row.get(0)?,
-                input: row.get(1)?,
-                output: output.clone(),
-                output_preview: truncate_output(&output),
+                input,
+                output_preview,
                 template_name: row.get(3)?,
                 timestamp: row.get(4)?,
             })

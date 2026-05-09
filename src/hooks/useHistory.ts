@@ -33,11 +33,12 @@ export function useHistory() {
     }
   }, []);
 
-  const addHistoryItem = useCallback(async (input: string, output: string, templateName: string) => {
+  const addHistoryItem = useCallback(async (input: string, templateName: string) => {
     try {
       await invoke<HistoryItem>("add_history", {
         input,
-        output,
+        // output_preview: generate preview from input
+        output_preview: input,
         templateName,
       });
       await loadHistory();

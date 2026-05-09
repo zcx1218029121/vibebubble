@@ -55,10 +55,10 @@ export function MainWindow() {
       });
       setOutput(result);
 
-      // Add to SQLite history
+      // Add to SQLite history (only store input + template, not output)
       await invoke<HistoryItem>("add_history", {
         input,
-        output: result,
+        output_preview: input, // use input as preview since we don't store output
         templateName: template.name,
       });
 
