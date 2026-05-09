@@ -116,10 +116,23 @@ fn parse_shortcut(modifiers: &[String], key: &str) -> Shortcut {
 fn setup_shortcut_callback(app_handle: AppHandle) -> impl Fn(&AppHandle, &Shortcut, ShortcutEvent) {
     move |_app, _shortcut, event| {
         if event.state == ShortcutState::Pressed {
-            info!("Global shortcut triggered!");
             if let Some(window) = app_handle.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.set_focus();
+                match window.is_visible() {
+                    Ok(true) => {
+                        info!("Hiding bubble");
+                        let _ = window.hide();
+                    }
+                    Ok(false) => {
+                        info!("Showing bubble");
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                    }
+                    Err(_) => {
+                        info!("Showing bubble (visibility check failed)");
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                    }
+                }
             }
         }
     }
