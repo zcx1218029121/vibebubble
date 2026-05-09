@@ -1,4 +1,4 @@
-use crate::ai_backend::{send_chat_request, AIBackend, AIError};
+use crate::ai_backend::{build_url, send_chat_request, AIBackend, AIError};
 
 /// Claude backend — uses Anthropic Messages API
 pub struct ClaudeBackend {
@@ -21,13 +21,12 @@ impl ClaudeBackend {
     }
 
     fn get_url(&self) -> String {
-        if self.base_url.is_empty() {
-            "https://api.anthropic.com/v1/messages".to_string()
-        } else if self.is_full_url {
-            self.base_url.trim_end_matches('/').to_string()
-        } else {
-            format!("{}/messages", self.base_url.trim_end_matches('/'))
-        }
+        build_url(
+            &self.base_url,
+            "https://api.anthropic.com/v1/messages",
+            "/messages",
+            self.is_full_url,
+        )
     }
 
     fn auth_header(&self) -> (&str, String) {

@@ -1,4 +1,4 @@
-use crate::ai_backend::{send_chat_request, AIBackend, AIError};
+use crate::ai_backend::{build_url, send_chat_request, AIBackend, AIError};
 
 /// OpenAI-compatible backend — uses Chat Completions API
 pub struct OpenAIBackend {
@@ -19,13 +19,12 @@ impl OpenAIBackend {
     }
 
     fn get_url(&self) -> String {
-        if self.base_url.is_empty() {
-            "https://api.openai.com/v1/chat/completions".to_string()
-        } else if self.is_full_url {
-            self.base_url.trim_end_matches('/').to_string()
-        } else {
-            format!("{}/chat/completions", self.base_url.trim_end_matches('/'))
-        }
+        build_url(
+            &self.base_url,
+            "https://api.openai.com/v1/chat/completions",
+            "/chat/completions",
+            self.is_full_url,
+        )
     }
 }
 

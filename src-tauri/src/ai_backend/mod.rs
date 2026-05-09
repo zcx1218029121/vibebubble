@@ -75,6 +75,20 @@ pub async fn send_chat_request(
     Ok(data)
 }
 
+/// Build full URL from base_url and path suffix
+/// - If is_full_url: return base_url as-is
+/// - If base_url is empty: use default for the API type
+/// - Otherwise: append path to base_url
+fn build_url(base_url: &str, default_url: &str, path: &str, is_full_url: bool) -> String {
+    if base_url.is_empty() {
+        default_url.to_string()
+    } else if is_full_url {
+        base_url.trim_end_matches('/').to_string()
+    } else {
+        format!("{}/{}", base_url.trim_end_matches('/'), path.trim_start_matches('/'))
+    }
+}
+
 /// AI Backend trait — all backends implement this
 #[async_trait::async_trait]
 pub trait AIBackend: Send + Sync {
