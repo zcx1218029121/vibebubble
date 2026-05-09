@@ -621,19 +621,12 @@ pub fn run() {
                 })
                 .build(app)?;
 
-            // Register global shortcut Cmd+Shift+V
-            let shortcut = Shortcut::new(Some(Modifiers::META | Modifiers::SHIFT), Code::KeyV);
+            // Register global shortcut from config
+            let config = load_config_inner(app.handle())?;
+            let shortcut = parse_shortcut(&config.shortcut.modifiers, &config.shortcut.key);
             let app_handle = app.handle().clone();
-            app.global_shortcut().on_shortcut(shortcut, move |_app, _shortcut, event| {
-                if event.state == ShortcutState::Pressed {
-                    info!("Global shortcut triggered!");
-                    if let Some(window) = app_handle.get_webview_window("main") {
-                        let _ = window.show();
-                        let _ = window.set_focus();
-                    }
-                }
-            })?;
-            info!("Global shortcut registered: Cmd+Shift+V");
+            app.global_shortcut().on_shortcut(shortcut, setup_shortcut_callback(app_handle))?;
+            info!("Global shortcut registered from config");
 
             // Hide window when it loses focus
             let main_window = app.get_webview_window("main").unwrap();
