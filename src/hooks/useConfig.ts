@@ -3,13 +3,14 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { AppConfig, PromptTemplate } from "../types";
-import { PRESET_TEMPLATES, DEFAULT_BACKEND_CONFIG } from "../types";
+import { PRESET_TEMPLATES, DEFAULT_BACKEND_CONFIG, DEFAULT_SHORTCUT } from "../types";
 
 const DEFAULT_CONFIG: AppConfig = {
   templates: PRESET_TEMPLATES,
   selected_template_id: "default",
   output_mode: "clipboard",
   backend: DEFAULT_BACKEND_CONFIG,
+  shortcut: DEFAULT_SHORTCUT,
 };
 
 export function useConfig() {

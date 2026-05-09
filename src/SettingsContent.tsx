@@ -5,6 +5,7 @@ import { useHistory } from "./hooks/useHistory";
 import { useToast } from "./hooks/useToast";
 import { API_TYPE_DEFAULTS } from "./types";
 import { HistoryList } from "./components/HistoryList";
+import { ShortcutInput } from "./components/ShortcutInput";
 import { TemplateEditor } from "./components/TemplateEditor";
 
 const API_TYPE_LABELS: Record<ApiType, string> = {
@@ -189,6 +190,7 @@ export function SettingsContent() {
   const [settingsTab, setSettingsTab] = useState<"general" | "providers" | "templates" | "history">("general");
   const [editingProfile, setEditingProfile] = useState<ProviderProfile | null | "new">(null);
   const [editingTemplate, setEditingTemplate] = useState<PromptTemplate | null | "new">(null);
+  const [shortcut, setShortcut] = useState(config.shortcut);
 
   const backend = config.backend;
   const profiles = backend.profiles;
@@ -329,8 +331,20 @@ export function SettingsContent() {
                 </div>
               )}
             </div>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-300 mb-2">快捷键</label>
+              <ShortcutInput
+                value={shortcut}
+                onChange={(config) => setShortcut(config)}
+              />
+              <div className="mt-1 text-xs text-gray-400">用于呼出气泡窗口</div>
+            </div>
             <button
-              onClick={() => { saveConfig(); showToast("设置已保存"); }}
+              onClick={() => {
+                setConfig({ ...config, shortcut });
+                saveConfig();
+                showToast("设置已保存");
+              }}
               className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors"
             >
               保存
