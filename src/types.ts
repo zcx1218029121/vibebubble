@@ -33,6 +33,11 @@ export interface BackendConfig {
   selected_profile_id: string;
 }
 
+export interface ShortcutConfig {
+  modifiers: string[];  // "meta", "ctrl", "alt", "shift"
+  key: string;
+}
+
 export const API_TYPE_DEFAULTS: Record<ApiType, { base_url: string; model: string }> = {
   anthropic: { base_url: "https://api.anthropic.com", model: "claude-sonnet-4-20250514" },
   openai: { base_url: "https://api.openai.com/v1", model: "gpt-4o-mini" },
@@ -43,11 +48,17 @@ export const DEFAULT_BACKEND_CONFIG: BackendConfig = {
   selected_profile_id: "",
 };
 
+export const DEFAULT_SHORTCUT: ShortcutConfig = {
+  modifiers: ["meta", "shift"],
+  key: "v",
+};
+
 export interface AppConfig {
   templates: PromptTemplate[];
   selected_template_id: string;
   output_mode: string;
   backend: BackendConfig;
+  shortcut: ShortcutConfig;
 }
 
 export const DEFAULT_TEMPLATE: PromptTemplate = {
