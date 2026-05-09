@@ -36,6 +36,8 @@ pub struct AppConfig {
     pub output_mode: String,
     #[serde(rename = "backend")]
     pub backend: ai_backend::BackendConfig,
+    #[serde(rename = "shortcut", default)]
+    pub shortcut: ShortcutConfig,
 }
 
 impl Default for AppConfig {
@@ -51,6 +53,7 @@ impl Default for AppConfig {
             selected_template_id: "default".to_string(),
             output_mode: "clipboard".to_string(),
             backend: ai_backend::BackendConfig::default(),
+            shortcut: ShortcutConfig::default(),
         }
     }
 }
@@ -64,6 +67,21 @@ pub struct HistoryItem {
     pub output_preview: String,
     pub template_name: String,
     pub timestamp: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ShortcutConfig {
+    pub modifiers: Vec<String>, // "meta", "ctrl", "alt", "shift"
+    pub key: String,           // "v", "a", "F1", etc.
+}
+
+impl Default for ShortcutConfig {
+    fn default() -> Self {
+        Self {
+            modifiers: vec!["meta".to_string(), "shift".to_string()],
+            key: "v".to_string(),
+        }
+    }
 }
 
 const MAX_OUTPUT_PREVIEW: usize = 200;
