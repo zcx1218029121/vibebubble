@@ -1,8 +1,11 @@
 import { useState } from "react";
-import type { ProviderProfile, ApiType } from "./types";
+import type { ProviderProfile, ApiType, PromptTemplate } from "./types";
 import { useConfig } from "./hooks/useConfig";
+import { useHistory } from "./hooks/useHistory";
 import { useToast } from "./hooks/useToast";
 import { API_TYPE_DEFAULTS } from "./types";
+import { HistoryList } from "./components/HistoryList";
+import { TemplateEditor } from "./components/TemplateEditor";
 
 const API_TYPE_LABELS: Record<ApiType, string> = {
   anthropic: "Anthropic (Claude)",
@@ -182,8 +185,10 @@ function ProfileCard({ profile, isSelected, onSelect, onEdit, onDelete }: Profil
 export function SettingsContent() {
   const { config, setConfig, saveConfig } = useConfig();
   const { toast, showToast } = useToast();
+  const { history, deleteHistoryItem, clearHistory } = useHistory();
   const [settingsTab, setSettingsTab] = useState<"general" | "providers" | "templates" | "history">("general");
   const [editingProfile, setEditingProfile] = useState<ProviderProfile | null | "new">(null);
+  const [editingTemplate, setEditingTemplate] = useState<PromptTemplate | null | "new">(null);
 
   const backend = config.backend;
   const profiles = backend.profiles;
@@ -212,6 +217,35 @@ export function SettingsContent() {
 
   const handleSelectProfile = (id: string) => {
     setConfig({ ...config, backend: { ...backend, selected_profile_id: id } });
+    saveConfig();
+  };
+
+  // Template management
+  const handleSaveTemplate = (template: PromptTemplate) => {
+    if (editingTemplate === "new") {
+      setConfig({
+        ...config,
+        templates: [...config.templates, template],
+        selected_template_id: template.id,
+      });
+    } else {
+      setConfig({
+        ...config,
+        templates: config.templates.map((t) => t.id === template.id ? template : t),
+      });
+    }
+    saveConfig();
+    setEditingTemplate(null);
+  };
+
+  const handleDeleteTemplate = (id: string) => {
+    if (config.templates.length <= 1) {
+      alert("至少保留一个模板");
+      return;
+    }
+    const newTemplates = config.templates.filter((t) => t.id !== id);
+    const newSelectedId = config.selected_template_id === id ? newTemplates[0].id : config.selected_template_id;
+    setConfig({ ...config, templates: newTemplates, selected_template_id: newSelectedId });
     saveConfig();
   };
 
@@ -350,15 +384,83 @@ export function SettingsContent() {
         )}
 
         {settingsTab === "templates" && (
-          <div className="text-gray-400">
-            模板管理（开发中...）
+          <div>
+            {!editingTemplate && (
+              <>
+                <div className="space-y-2 mb-4">
+                  {config.templates.map((template) => (
+                    <div
+                      key={template.id}
+                      className={`p-3 rounded-lg border ${
+                        template.id === config.selected_template_id
+                          ? "border-blue-500 bg-blue-500/10"
+                          : "border-gray-700 bg-gray-700/30"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-medium text-gray-200">{template.name}</div>
+                          <div className="text-xs text-gray-400 mt-1">{template.description}</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {template.id === config.selected_template_id && (
+                            <span className="text-xs text-blue-400">✓ 使用中</span>
+                          )}
+                          <button
+                            onClick={() => setEditingTemplate(template)}
+                            className="text-xs px-2 py-1 bg-gray-600 hover:bg-gray-500 rounded transition-colors"
+                          >
+                            编辑
+                          </button>
+                          <button
+                            onClick={() => handleDeleteTemplate(template.id)}
+                            className="text-xs px-2 py-1 bg-red-600/50 hover:bg-red-600 rounded transition-colors"
+                          >
+                            删除
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  onClick={() => setEditingTemplate("new")}
+                  className="w-full py-2 border-2 border-dashed border-gray-600 rounded-lg text-gray-400 hover:text-gray-200 hover:border-gray-500 transition-colors"
+                >
+                  + 添加新模板
+                </button>
+              </>
+            )}
+            {editingTemplate === "new" && (
+              <TemplateEditor
+                template={{
+                  id: `template_${Date.now()}`,
+                  name: "新模板",
+                  description: "描述这个模板的用途",
+                  prompt: "输入提示词内容...",
+                }}
+                isNew={true}
+                onSave={handleSaveTemplate}
+                onCancel={() => setEditingTemplate(null)}
+              />
+            )}
+            {editingTemplate && editingTemplate !== "new" && (
+              <TemplateEditor
+                template={editingTemplate}
+                isNew={false}
+                onSave={handleSaveTemplate}
+                onCancel={() => setEditingTemplate(null)}
+              />
+            )}
           </div>
         )}
 
         {settingsTab === "history" && (
-          <div className="text-gray-400">
-            历史记录（开发中...）
-          </div>
+          <HistoryList
+            history={history}
+            onDelete={deleteHistoryItem}
+            onClear={clearHistory}
+          />
         )}
       </div>
     </div>
