@@ -96,6 +96,87 @@ fn truncate_output(output: &str) -> String {
     }
 }
 
+/// Parse modifiers and key string into a Shortcut
+fn parse_shortcut(modifiers: &[String], key: &str) -> Shortcut {
+    let mut mods = Modifiers::empty();
+    for m in modifiers {
+        match m.as_str() {
+            "meta" | "cmd" => mods |= Modifiers::META,
+            "ctrl" => mods |= Modifiers::CONTROL,
+            "alt" => mods |= Modifiers::ALT,
+            "shift" => mods |= Modifiers::SHIFT,
+            _ => {}
+        }
+    }
+    let code = code_from_string(key);
+    Shortcut::new(Some(mods), code)
+}
+
+/// Map string key to Code enum
+fn code_from_string(key: &str) -> Code {
+    match key.to_uppercase().as_str() {
+        "A" => Code::KeyA,
+        "B" => Code::KeyB,
+        "C" => Code::KeyC,
+        "D" => Code::KeyD,
+        "E" => Code::KeyE,
+        "F" => Code::KeyF,
+        "G" => Code::KeyG,
+        "H" => Code::KeyH,
+        "I" => Code::KeyI,
+        "J" => Code::KeyJ,
+        "K" => Code::KeyK,
+        "L" => Code::KeyL,
+        "M" => Code::KeyM,
+        "N" => Code::KeyN,
+        "O" => Code::KeyO,
+        "P" => Code::KeyP,
+        "Q" => Code::KeyQ,
+        "R" => Code::KeyR,
+        "S" => Code::KeyS,
+        "T" => Code::KeyT,
+        "U" => Code::KeyU,
+        "V" => Code::KeyV,
+        "W" => Code::KeyW,
+        "X" => Code::KeyX,
+        "Y" => Code::KeyY,
+        "Z" => Code::KeyZ,
+        "0" => Code::Digit0,
+        "1" => Code::Digit1,
+        "2" => Code::Digit2,
+        "3" => Code::Digit3,
+        "4" => Code::Digit4,
+        "5" => Code::Digit5,
+        "6" => Code::Digit6,
+        "7" => Code::Digit7,
+        "8" => Code::Digit8,
+        "9" => Code::Digit9,
+        "F1" => Code::F1,
+        "F2" => Code::F2,
+        "F3" => Code::F3,
+        "F4" => Code::F4,
+        "F5" => Code::F5,
+        "F6" => Code::F6,
+        "F7" => Code::F7,
+        "F8" => Code::F8,
+        "F9" => Code::F9,
+        "F10" => Code::F10,
+        "F11" => Code::F11,
+        "F12" => Code::F12,
+        "SPACE" => Code::Space,
+        "ENTER" => Code::Enter,
+        "TAB" => Code::Tab,
+        "ESCAPE" | "ESC" => Code::Escape,
+        "BACKSPACE" => Code::Backspace,
+        "DELETE" => Code::Delete,
+        "UP" => Code::ArrowUp,
+        "DOWN" => Code::ArrowDown,
+        "LEFT" => Code::ArrowLeft,
+        "RIGHT" => Code::ArrowRight,
+        _ => Code::KeyV,  // Default to V
+    }
+}
+
 const DEFAULT_PROMPT: &str = r#"你是一个代码助手。用户会输入一段粗糙的想法或需求，请将其转化为清晰、具体、可执行的任务描述。
 
 要求：
