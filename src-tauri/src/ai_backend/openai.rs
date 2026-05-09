@@ -9,7 +9,7 @@ pub struct OpenAIBackend {
 }
 
 impl OpenAIBackend {
-    pub fn with_base_url(api_key: &str, base_url: &str, _auth_style: &str, model: &str, is_full_url: bool) -> Self {
+    pub fn new(api_key: &str, base_url: &str, model: &str, is_full_url: bool) -> Self {
         Self {
             api_key: api_key.to_string(),
             base_url: base_url.to_string(),

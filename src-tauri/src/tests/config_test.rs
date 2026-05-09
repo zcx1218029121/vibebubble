@@ -20,6 +20,7 @@ fn test_backend_config_with_profiles() {
         base_url: "https://api.openai.com/v1".to_string(),
         api_key: "sk-test-key".to_string(),
         model: "gpt-4o-mini".to_string(),
+        is_full_url: false,
     };
     
     let config = BackendConfig {
@@ -42,6 +43,7 @@ fn test_backend_config_clone() {
         base_url: "https://api.anthropic.com".to_string(),
         api_key: "sk-ant-test".to_string(),
         model: "claude-sonnet-4-20250514".to_string(),
+        is_full_url: false,
     };
     
     let config = BackendConfig {
@@ -64,6 +66,7 @@ fn test_backend_config_serialize() {
         base_url: "https://api.openai.com/v1".to_string(),
         api_key: "sk-test".to_string(),
         model: "gpt-4o-mini".to_string(),
+        is_full_url: false,
     };
     
     let config = BackendConfig {
@@ -88,6 +91,7 @@ fn test_provider_profile_fields() {
         base_url: "https://custom.api.com/v1".to_string(),
         api_key: "key".to_string(),
         model: "gpt-4".to_string(),
+        is_full_url: false,
     };
     
     assert_eq!(profile.id, "test");

@@ -67,6 +67,16 @@ pub struct HistoryItem {
 
 const MAX_OUTPUT_PREVIEW: usize = 200;
 
+/// Truncate output to MAX_OUTPUT_PREVIEW chars with "..." suffix
+fn truncate_output(output: &str) -> String {
+    let chars: Vec<char> = output.chars().collect();
+    if chars.len() > MAX_OUTPUT_PREVIEW {
+        chars[..MAX_OUTPUT_PREVIEW].iter().collect::<String>() + "..."
+    } else {
+        output.to_string()
+    }
+}
+
 const DEFAULT_PROMPT: &str = r#"你是一个代码助手。用户会输入一段粗糙的想法或需求，请将其转化为清晰、具体、可执行的任务描述。
 
 要求：
@@ -201,14 +211,7 @@ async fn add_history(
         id,
         input: input.clone(),
         output: output.clone(),
-        output_preview: {
-            let chars: Vec<char> = output.chars().collect();
-            if chars.len() > MAX_OUTPUT_PREVIEW {
-                chars[..MAX_OUTPUT_PREVIEW].iter().collect::<String>() + "..."
-            } else {
-                output.clone()
-            }
-        },
+        output_preview: truncate_output(&output),
         template_name,
         timestamp,
     })
@@ -226,19 +229,11 @@ async fn get_history(state: State<'_, AppState>, limit: Option<usize>) -> Result
     let rows = stmt
         .query_map([limit as i64], |row| {
             let output: String = row.get(2)?;
-            let output_preview = {
-                let chars: Vec<char> = output.chars().collect();
-                if chars.len() > MAX_OUTPUT_PREVIEW {
-                    chars[..MAX_OUTPUT_PREVIEW].iter().collect::<String>() + "..."
-                } else {
-                    output.clone()
-                }
-            };
             Ok(HistoryItem {
                 id: row.get(0)?,
                 input: row.get(1)?,
                 output: output.clone(),
-                output_preview,
+                output_preview: truncate_output(&output),
                 template_name: row.get(3)?,
                 timestamp: row.get(4)?,
             })

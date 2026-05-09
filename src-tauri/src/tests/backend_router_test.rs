@@ -12,6 +12,7 @@ mod tests {
             base_url: "https://api.openai.com/v1".to_string(),
             api_key: "test-key".to_string(),
             model: "gpt-4o-mini".to_string(),
+            is_full_url: false,
         };
         let config = BackendConfig {
             profiles: vec![profile],
@@ -30,6 +31,7 @@ mod tests {
             base_url: "https://api.anthropic.com".to_string(),
             api_key: "test-key".to_string(),
             model: "claude-sonnet-4-20250514".to_string(),
+            is_full_url: false,
         };
         let config = BackendConfig {
             profiles: vec![profile],
@@ -62,6 +64,7 @@ mod tests {
             base_url: "https://api.openai.com/v1".to_string(),
             api_key: "test-key".to_string(),
             model: "".to_string(),  // Empty model
+            is_full_url: false,
         };
         let config = BackendConfig {
             profiles: vec![profile],
@@ -82,6 +85,7 @@ mod tests {
             base_url: "".to_string(),
             api_key: "test-key".to_string(),
             model: "gpt-4o-mini".to_string(),
+            is_full_url: false,
         };
         let config = BackendConfig {
             profiles: vec![profile],
@@ -112,6 +116,7 @@ mod tests {
             base_url: "https://api.openai.com/v1".to_string(),
             api_key: String::new(),  // Empty API key
             model: "gpt-4o-mini".to_string(),
+            is_full_url: false,
         };
         let config = BackendConfig {
             profiles: vec![profile],
@@ -130,6 +135,7 @@ mod tests {
             base_url: "https://api.anthropic.com".to_string(),
             api_key: String::new(),  // Empty API key
             model: "claude-sonnet-4-20250514".to_string(),
+            is_full_url: false,
         };
         let config = BackendConfig {
             profiles: vec![profile],
@@ -143,7 +149,7 @@ mod tests {
     async fn test_backend_trait_object_sends() {
         // Verify that Box<dyn AIBackend> satisfies Send
         fn assert_send<T: Send>(_: &T) {}
-        
+
         let profile = ProviderProfile {
             id: "test".to_string(),
             name: "Test".to_string(),
@@ -151,6 +157,7 @@ mod tests {
             base_url: "https://api.openai.com/v1".to_string(),
             api_key: "test-key".to_string(),
             model: "gpt-4o-mini".to_string(),
+            is_full_url: false,
         };
         let config = BackendConfig {
             profiles: vec![profile],
@@ -172,6 +179,7 @@ mod tests {
             base_url: "https://api.openai.com/v1".to_string(),
             api_key: "test-key".to_string(),
             model: "gpt-4o-mini".to_string(),
+            is_full_url: false,
         };
         let config = BackendConfig {
             profiles: vec![profile],

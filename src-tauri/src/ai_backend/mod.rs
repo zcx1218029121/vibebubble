@@ -152,10 +152,9 @@ pub fn create_backend(selected_profile_id: &str, config: &BackendConfig) -> Resu
             if profile.api_key.is_empty() {
                 return Err(AIError::Auth("API Key 未配置".to_string()));
             }
-            Ok(Box::new(openai::OpenAIBackend::with_base_url(
+            Ok(Box::new(openai::OpenAIBackend::new(
                 &profile.api_key,
                 &profile.base_url,
-                "bearer",
                 &profile.model,
                 profile.is_full_url,
             )))
