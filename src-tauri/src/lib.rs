@@ -458,6 +458,73 @@ fn load_config_inner(app: &AppHandle) -> Result<AppConfig, String> {
 }
 
 #[tauri::command]
+async fn get_shortcut(app: AppHandle) -> Result<ShortcutConfig, String> {
+    let config = load_config_inner(&app)?;
+    Ok(config.shortcut)
+}
+
+#[tauri::command]
+async fn try_register_shortcut(
+    app: AppHandle,
+    modifiers: Vec<String>,
+    key: String,
+) -> Result<(), String> {
+    let shortcut = parse_shortcut(&modifiers, &key);
+    let app_handle = app.clone();
+
+    app.global_shortcut()
+        .on_shortcut(shortcut, move |_app, _shortcut, event| {
+            if event.state == ShortcutState::Pressed {
+                info!("Global shortcut triggered!");
+                if let Some(window) = app_handle.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            }
+        })
+        .map_err(|e| format!("注册快捷键失败: {}", e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn save_shortcut(
+    app: AppHandle,
+    modifiers: Vec<String>,
+    key: String,
+) -> Result<(), String> {
+    // First unregister all existing shortcuts
+    app.global_shortcut().unregister_all().map_err(|e| e.to_string())?;
+
+    // Register the new shortcut
+    let shortcut = parse_shortcut(&modifiers, &key);
+    let app_handle = app.clone();
+
+    app.global_shortcut()
+        .on_shortcut(shortcut, move |_app, _shortcut, event| {
+            if event.state == ShortcutState::Pressed {
+                info!("Global shortcut triggered!");
+                if let Some(window) = app_handle.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            }
+        })
+        .map_err(|e| format!("注册快捷键失败: {}", e))?;
+
+    // Save to config
+    let mut config = load_config_inner(&app)?;
+    config.shortcut = ShortcutConfig {
+        modifiers,
+        key,
+    };
+    save_config(app, config).await?;
+
+    info!("Shortcut saved and registered successfully");
+    Ok(())
+}
+
+#[tauri::command]
 async fn get_default_prompt() -> String {
     DEFAULT_PROMPT.to_string()
 }
@@ -595,6 +662,9 @@ pub fn run() {
             get_history,
             delete_history_item,
             clear_history,
+            get_shortcut,
+            try_register_shortcut,
+            save_shortcut,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
