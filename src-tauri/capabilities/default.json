@@ -13,6 +13,7 @@
     "opener:default",
     "global-shortcut:default",
     "clipboard-manager:default",
+    "clipboard-manager:allow-write-text",
     "log:default"
   ]
 }
