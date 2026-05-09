@@ -498,7 +498,15 @@ async fn save_shortcut(
     modifiers: Vec<String>,
     key: String,
 ) -> Result<(), String> {
-    // First unregister all existing shortcuts
+    // Save to config first - if registration fails later, config will be correct for next restart
+    let mut config = load_config_inner(&app)?;
+    config.shortcut = ShortcutConfig {
+        modifiers: modifiers.clone(),
+        key: key.clone(),
+    };
+    save_config(app.clone(), config).await?;
+
+    // Unregister all existing shortcuts
     app.global_shortcut().unregister_all().map_err(|e| e.to_string())?;
 
     // Register the new shortcut
@@ -508,14 +516,6 @@ async fn save_shortcut(
     app.global_shortcut()
         .on_shortcut(shortcut, setup_shortcut_callback(app_handle))
         .map_err(|e| format!("注册快捷键失败: {}", e))?;
-
-    // Save to config
-    let mut config = load_config_inner(&app)?;
-    config.shortcut = ShortcutConfig {
-        modifiers,
-        key,
-    };
-    save_config(app, config).await?;
 
     info!("Shortcut saved and registered successfully");
     Ok(())
