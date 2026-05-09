@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
 use tauri::{menu::{Menu, MenuItem}, tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}, AppHandle, Manager, State, WindowEvent};
-use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutEvent, ShortcutState};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PromptTemplate {
@@ -110,6 +110,19 @@ fn parse_shortcut(modifiers: &[String], key: &str) -> Shortcut {
     }
     let code = code_from_string(key);
     Shortcut::new(Some(mods), code)
+}
+
+/// Create the shortcut callback closure that shows and focuses the main window
+fn setup_shortcut_callback(app_handle: AppHandle) -> impl Fn(&AppHandle, &Shortcut, ShortcutEvent) {
+    move |_app, _shortcut, event| {
+        if event.state == ShortcutState::Pressed {
+            info!("Global shortcut triggered!");
+            if let Some(window) = app_handle.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }
+    }
 }
 
 /// Map string key to Code enum
@@ -473,15 +486,7 @@ async fn try_register_shortcut(
     let app_handle = app.clone();
 
     app.global_shortcut()
-        .on_shortcut(shortcut, move |_app, _shortcut, event| {
-            if event.state == ShortcutState::Pressed {
-                info!("Global shortcut triggered!");
-                if let Some(window) = app_handle.get_webview_window("main") {
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                }
-            }
-        })
+        .on_shortcut(shortcut, setup_shortcut_callback(app_handle))
         .map_err(|e| format!("注册快捷键失败: {}", e))?;
 
     Ok(())
@@ -501,15 +506,7 @@ async fn save_shortcut(
     let app_handle = app.clone();
 
     app.global_shortcut()
-        .on_shortcut(shortcut, move |_app, _shortcut, event| {
-            if event.state == ShortcutState::Pressed {
-                info!("Global shortcut triggered!");
-                if let Some(window) = app_handle.get_webview_window("main") {
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                }
-            }
-        })
+        .on_shortcut(shortcut, setup_shortcut_callback(app_handle))
         .map_err(|e| format!("注册快捷键失败: {}", e))?;
 
     // Save to config
