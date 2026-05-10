@@ -5,6 +5,7 @@ import { SettingsContent } from "./SettingsContent";
 
 function App() {
   const [windowType, setWindowType] = useState<"main" | "settings">("main");
+  const isMac = typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform);
 
   // Detect window type on mount
   useEffect(() => {
@@ -31,7 +32,7 @@ function App() {
     );
   }
 
-  return <MainWindow />;
+  return <MainWindow isMac={isMac} />;
 }
 
 export default App;

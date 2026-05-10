@@ -7,7 +7,11 @@ import { useHistory } from "./hooks/useHistory";
 import { useClipboard } from "./hooks/useClipboard";
 import { useToast } from "./hooks/useToast";
 
-export function MainWindow() {
+interface MainWindowProps {
+  isMac?: boolean;
+}
+
+export function MainWindow({ isMac = true }: MainWindowProps) {
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -42,6 +46,15 @@ export function MainWindow() {
     };
   }, [loadConfig, loadHistory]);
 
+  // Set body background based on platform (for transparent window corners)
+  useEffect(() => {
+    if (!isMac) {
+      document.body.style.background = '#1e1e1e';
+    } else {
+      document.body.style.background = 'transparent';
+    }
+  }, [isMac]);
+
   const handleSubmit = async () => {
     if (!input.trim()) return;
     setLoading(true);
@@ -55,10 +68,10 @@ export function MainWindow() {
       });
       setOutput(result);
 
-      // Add to SQLite history (only store input + template, not output)
+      // Add to SQLite history
       await invoke<HistoryItem>("add_history", {
         input,
-        output_preview: input, // use input as preview since we don't store output
+        outputPreview: result,
         templateName: template.name,
       });
 
@@ -109,13 +122,13 @@ export function MainWindow() {
 
   return (
     <div
-      className="ios-glass h-screen text-white flex flex-col select-none overflow-hidden"
+      className={`h-screen text-white flex flex-col select-none overflow-hidden ${isMac ? 'ios-glass' : 'bg-[#1e1e1e] border border-white/10'}`}
       style={{ padding: '32px' }}
       data-tauri-drag-region
     >
       {/* Toast */}
       {toast && (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 bg-white/20 backdrop-blur-md text-white px-4 py-2 rounded-full shadow-lg text-sm border border-white/20">
+        <div className={`absolute top-16 left-1/2 -translate-x-1/2 z-50 bg-white/20 backdrop-blur-md text-white px-4 py-2 shadow-lg text-sm border border-white/20 rounded`}>
           {toast}
         </div>
       )}
@@ -156,7 +169,7 @@ export function MainWindow() {
             setConfig(newConfig);
             saveConfig(newConfig);
           }}
-          className="w-full bg-white/10 rounded-xl p-2.5 text-white outline-none focus:ring-2 focus:ring-blue-400/50 text-sm border border-white/10 focus:border-white/40 transition-all"
+          className={`w-full bg-white/10 p-2.5 text-white outline-none focus:ring-2 focus:ring-blue-400/50 text-sm border border-white/10 focus:border-white/40 transition-all rounded`}
         >
           {config.templates.map((t) => (
             <option key={t.id} value={t.id} className="bg-gray-800">
@@ -174,7 +187,7 @@ export function MainWindow() {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={`输入你的想法，按 Enter 转换...\n当前模板: ${getCurrentTemplate().name}`}
-          className="w-full h-20 bg-white/10 rounded-2xl p-3 text-white placeholder-white/40 resize-none outline-none focus:ring-2 focus:ring-blue-400/50 border border-white/10 focus:border-white/40 transition-all"
+          className={`w-full h-20 bg-white/10 p-3 text-white placeholder-white/40 resize-none outline-none focus:ring-2 focus:ring-blue-400/50 border border-white/10 focus:border-white/40 transition-all rounded`}
           disabled={loading}
         />
 
@@ -182,7 +195,7 @@ export function MainWindow() {
         <button
           onClick={handleSubmit}
           disabled={!input.trim() || loading}
-          className={`w-full py-3 rounded-2xl font-medium transition-all border-2 ${
+          className={`w-full py-3 font-medium transition-all border-2 rounded ${
             loading
               ? "btn-convert loading text-white"
               : "bg-white/20 hover:bg-white/30 disabled:bg-white/10 disabled:text-white/40 text-white border-white/20 hover:border-white/40"
@@ -207,12 +220,12 @@ export function MainWindow() {
               </span>
               <button
                 onClick={() => handleCopy(output)}
-                className="text-xs px-3 py-1 bg-white/20 hover:bg-white/30 rounded-full transition-colors text-white"
+                className={`text-xs px-3 py-1 bg-white/20 hover:bg-white/30 transition-colors text-white rounded`}
               >
                 📋 复制
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto bg-gray-800/80 backdrop-blur-sm rounded-2xl p-4 text-gray-100 whitespace-pre-wrap select-text border border-white/10">
+            <div className={`flex-1 overflow-y-auto bg-gray-800/80 p-4 text-gray-100 whitespace-pre-wrap select-text border border-white/10 rounded`}>
               {output}
             </div>
           </div>

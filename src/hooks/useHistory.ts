@@ -38,7 +38,7 @@ export function useHistory() {
       await invoke<HistoryItem>("add_history", {
         input,
         // output_preview: generate preview from input
-        output_preview: input,
+        outputPreview: input,
         templateName,
       });
       await loadHistory();

@@ -9,11 +9,10 @@ use nix::fcntl::{flock, FlockArg};
 use rusqlite::{Connection, Result as SqlResult};
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::os::unix::io::AsRawFd;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
-use tauri::{menu::{Menu, MenuItem}, tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}, AppHandle, Manager, State, WindowEvent};
+use tauri::{menu::{Menu, MenuItem}, tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}, AppHandle, Emitter, Manager, State, WindowEvent};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutEvent, ShortcutState};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -285,22 +284,27 @@ async fn load_config(app: AppHandle) -> Result<AppConfig, String> {
 #[tauri::command]
 async fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String> {
     let path = get_config_path(&app);
-    let lock_path = path.with_extension("lock");
     info!("Saving config to: {:?}", path);
 
-    // Acquire file lock
-    let lock_file = fs::OpenOptions::new()
-        .create(true)
-        .write(true)
-        .open(&lock_path)
-        .map_err(|e| format!("无法创建锁文件: {}", e))?;
+    // Acquire file lock (Unix-only)
+    #[cfg(unix)]
+    {
+        use std::os::unix::io::AsRawFd;
 
-    flock(
-        lock_file.as_raw_fd(),
-        FlockArg::LockExclusive,
-    ).map_err(|e| format!("无法锁定配置: {}", e))?;
+        let lock_path = path.with_extension("lock");
+        let lock_file = fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .open(&lock_path)
+            .map_err(|e| format!("无法创建锁文件: {}", e))?;
 
-    // Write to temp file then rename (atomic on POSIX)
+        flock(
+            lock_file.as_raw_fd(),
+            FlockArg::LockExclusive,
+        ).map_err(|e| format!("无法锁定配置: {}", e))?;
+    }
+
+    // Write to temp file then rename (atomic on POSIX, falls back on Windows)
     let temp_path = path.with_extension("tmp");
     let content = serde_json::to_string_pretty(&config).map_err(|e| e.to_string())?;
     fs::write(&temp_path, &content).map_err(|e| format!("写入临时文件失败: {}", e))?;
@@ -313,31 +317,37 @@ async fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String> {
 
 #[tauri::command]
 async fn add_history(
+    app: AppHandle,
     state: State<'_, AppState>,
     input: String,
-    output_preview: String, // Only store preview, not full output
-    template_name: String,
+    #[allow(non_snake_case)]
+    outputPreview: String, // Only store preview, not full output
+    #[allow(non_snake_case)]
+    templateName: String,
 ) -> Result<HistoryItem, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     let timestamp = chrono_timestamp();
-    
+
     conn.execute(
-        "INSERT INTO history (input, output_preview, template_name, timestamp) VALUES (?, ?, ?, ?)",
-        rusqlite::params![input, truncate_output(&output_preview), template_name, timestamp],
+        "INSERT INTO history (input, output, template_name, timestamp) VALUES (?, ?, ?, ?)",
+        rusqlite::params![input, truncate_output(&outputPreview), templateName, timestamp],
     ).map_err(|e| e.to_string())?;
-    
+
     let id = conn.last_insert_rowid();
-    
+
     // Cleanup old records
     cleanup_old_history(&conn).ok();
-    
+
     info!("Added history item: id={}", id);
-    
+
+    // Emit event to notify UI to refresh history
+    app.emit("history-updated", ()).ok();
+
     Ok(HistoryItem {
         id,
         input: input.clone(),
-        output_preview: truncate_output(&output_preview),
-        template_name,
+        output_preview: truncate_output(&outputPreview),
+        template_name: templateName,
         timestamp,
     })
 }
@@ -348,7 +358,7 @@ async fn get_history(state: State<'_, AppState>, limit: Option<usize>) -> Result
     let limit = limit.unwrap_or(100);
 
     let mut stmt = conn
-        .prepare("SELECT id, input, output_preview, template_name, timestamp FROM history ORDER BY timestamp DESC LIMIT ?")
+        .prepare("SELECT id, input, output, template_name, timestamp FROM history ORDER BY timestamp DESC LIMIT ?")
         .map_err(|e| e.to_string())?;
 
     let rows = stmt
