@@ -1,9 +1,9 @@
 import { useState } from "react";
 import type { ProviderProfile, ApiType, PromptTemplate } from "./types";
+import { API_TYPE_DEFAULTS, TEMPLATE_CATEGORIES } from "./types";
 import { useConfig } from "./hooks/useConfig";
 import { useHistory } from "./hooks/useHistory";
 import { useToast } from "./hooks/useToast";
-import { API_TYPE_DEFAULTS } from "./types";
 import { HistoryList } from "./components/HistoryList";
 import { ShortcutInput } from "./components/ShortcutInput";
 import { TemplateEditor } from "./components/TemplateEditor";
@@ -196,6 +196,8 @@ export function SettingsContent() {
   const [editingTemplate, setEditingTemplate] = useState<PromptTemplate | null | "new">(null);
   const [shortcut, setShortcut] = useState(config.shortcut);
   const [theme, setTheme] = useState(config.theme || "dark");
+  const [templateSearch, setTemplateSearch] = useState("");
+  const [templateCategory, setTemplateCategory] = useState<string>("全部");
 
   const backend = config.backend;
   const profiles = backend.profiles;
@@ -422,41 +424,116 @@ export function SettingsContent() {
           <div>
             {!editingTemplate && (
               <>
+                {/* Template Search and Filter */}
+                <div className="flex gap-2 mb-4">
+                  <div className="flex-1">
+                    <input
+                      type="text"
+                      placeholder="搜索模板..."
+                      value={templateSearch}
+                      onChange={(e) => setTemplateSearch(e.target.value)}
+                      className="w-full bg-gray-700 rounded-lg p-2 text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <select
+                    value={templateCategory}
+                    onChange={(e) => setTemplateCategory(e.target.value)}
+                    className="bg-gray-700 rounded-lg p-2 text-gray-100 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="全部">全部分类</option>
+                    {TEMPLATE_CATEGORIES.filter(c => c !== "全部").map((cat) => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+
                 <div className="space-y-2 mb-4">
-                  {config.templates.map((template) => (
-                    <div
-                      key={template.id}
-                      className={`p-3 rounded-lg border ${
-                        template.id === config.selected_template_id
-                          ? "border-blue-500 bg-blue-500/10"
-                          : "border-gray-700 bg-gray-700/30"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="font-medium text-gray-200">{template.name}</div>
-                          <div className="text-xs text-gray-400 mt-1">{template.description}</div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {template.id === config.selected_template_id && (
-                            <span className="text-xs text-blue-400">✓ 使用中</span>
-                          )}
-                          <button
-                            onClick={() => setEditingTemplate(template)}
-                            className="text-xs px-2 py-1 bg-gray-600 hover:bg-gray-500 rounded transition-colors"
-                          >
-                            编辑
-                          </button>
-                          <button
-                            onClick={() => handleDeleteTemplate(template.id)}
-                            className="text-xs px-2 py-1 bg-red-600/50 hover:bg-red-600 rounded transition-colors"
-                          >
-                            删除
-                          </button>
+                  {config.templates
+                    .filter((t) => {
+                      const matchSearch = !templateSearch ||
+                        t.name.toLowerCase().includes(templateSearch.toLowerCase()) ||
+                        t.description.toLowerCase().includes(templateSearch.toLowerCase());
+                      const matchCategory = templateCategory === "全部" || t.category === templateCategory;
+                      return matchSearch && matchCategory;
+                    })
+                    .map((template) => (
+                      <div
+                        key={template.id}
+                        className={`p-3 rounded-lg border ${
+                          template.id === config.selected_template_id
+                            ? "border-blue-500 bg-blue-500/10"
+                            : "border-gray-700 bg-gray-700/30"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <div className="font-medium text-gray-200">{template.name}</div>
+                              {template.category && (
+                                <span className="text-xs px-1.5 py-0.5 bg-gray-600/50 text-gray-400 rounded">
+                                  {template.category}
+                                </span>
+                              )}
+                              {template.is_builtin && (
+                                <span className="text-xs px-1.5 py-0.5 bg-blue-600/30 text-blue-400 rounded">
+                                  内置
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs text-gray-400 mt-1">{template.description}</div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {template.id === config.selected_template_id && (
+                              <span className="text-xs text-blue-400">✓ 使用中</span>
+                            )}
+                            <button
+                              onClick={() => {
+                                const duplicated = {
+                                  ...template,
+                                  id: `template_${Date.now()}`,
+                                  name: `${template.name} (副本)`,
+                                  is_builtin: false,
+                                };
+                                setConfig({
+                                  ...config,
+                                  templates: [...config.templates, duplicated],
+                                });
+                                saveConfig();
+                              }}
+                              className="text-xs px-2 py-1 bg-gray-600 hover:bg-gray-500 rounded transition-colors"
+                              title="复制模板"
+                            >
+                              复制
+                            </button>
+                            <button
+                              onClick={() => setEditingTemplate(template)}
+                              className="text-xs px-2 py-1 bg-gray-600 hover:bg-gray-500 rounded transition-colors"
+                            >
+                              编辑
+                            </button>
+                            <button
+                              onClick={() => handleDeleteTemplate(template.id)}
+                              className="text-xs px-2 py-1 bg-red-600/50 hover:bg-red-600 rounded transition-colors"
+                              disabled={template.is_builtin}
+                              title={template.is_builtin ? "内置模板不可删除" : "删除"}
+                            >
+                              删除
+                            </button>
+                          </div>
                         </div>
                       </div>
+                    ))}
+                  {config.templates.filter((t) => {
+                    const matchSearch = !templateSearch ||
+                      t.name.toLowerCase().includes(templateSearch.toLowerCase()) ||
+                      t.description.toLowerCase().includes(templateSearch.toLowerCase());
+                    const matchCategory = templateCategory === "全部" || t.category === templateCategory;
+                    return matchSearch && matchCategory;
+                  }).length === 0 && (
+                    <div className="text-center py-4 text-gray-500 text-sm">
+                      没有找到匹配的模板
                     </div>
-                  ))}
+                  )}
                 </div>
                 <button
                   onClick={() => setEditingTemplate("new")}
