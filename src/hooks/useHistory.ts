@@ -47,6 +47,17 @@ export function useHistory() {
     }
   }, [loadHistory]);
 
+  const toggleFavorite = useCallback(async (id: number, favorite: boolean) => {
+    try {
+      await invoke<boolean>("toggle_history_favorite", { id });
+      setHistory((prev) =>
+        prev.map((h) => (h.id === id ? { ...h, favorite } : h))
+      );
+    } catch (err) {
+      console.error("Failed to toggle favorite:", err);
+    }
+  }, []);
+
   // Load history on mount
   useEffect(() => {
     loadHistory();
@@ -64,5 +75,5 @@ export function useHistory() {
     return () => { unlisten?.(); };
   }, [loadHistory]);
 
-  return { history, loadHistory, deleteHistoryItem, clearHistory, addHistoryItem };
+  return { history, loadHistory, deleteHistoryItem, clearHistory, addHistoryItem, toggleFavorite };
 }

@@ -11,6 +11,7 @@ const DEFAULT_CONFIG: AppConfig = {
   output_mode: "clipboard",
   backend: DEFAULT_BACKEND_CONFIG,
   shortcut: DEFAULT_SHORTCUT,
+  theme: "dark",
 };
 
 export function useConfig() {
@@ -21,13 +22,14 @@ export function useConfig() {
     try {
       const cfg = await invoke<AppConfig>("load_config");
       if (cfg.templates && cfg.templates.length > 0) {
-        setConfig(cfg);
+        setConfig({ ...DEFAULT_CONFIG, ...cfg });
       } else {
         setConfig({
           ...cfg,
           templates: PRESET_TEMPLATES,
           selected_template_id: cfg.selected_template_id || "default",
           backend: cfg.backend || DEFAULT_BACKEND_CONFIG,
+          theme: cfg.theme || "dark",
         });
       }
     } catch (err) {

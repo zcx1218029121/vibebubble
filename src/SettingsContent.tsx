@@ -11,6 +11,8 @@ import { TemplateEditor } from "./components/TemplateEditor";
 const API_TYPE_LABELS: Record<ApiType, string> = {
   anthropic: "Anthropic (Claude)",
   openai: "OpenAI 兼容",
+  gemini: "Google Gemini",
+  deepseek: "DeepSeek",
 };
 
 // 生成唯一 ID
@@ -79,6 +81,8 @@ function ProfileForm({ profile, onSave, onCancel }: ProfileFormProps) {
         >
           <option value="openai">OpenAI 兼容</option>
           <option value="anthropic">Anthropic (Claude)</option>
+          <option value="gemini">Google Gemini</option>
+          <option value="deepseek">DeepSeek</option>
         </select>
       </div>
       <div>
@@ -186,11 +190,12 @@ function ProfileCard({ profile, isSelected, onSelect, onEdit, onDelete }: Profil
 export function SettingsContent() {
   const { config, setConfig, saveConfig } = useConfig();
   const { toast, showToast } = useToast();
-  const { history, deleteHistoryItem, clearHistory } = useHistory();
+  const { history, deleteHistoryItem, clearHistory, toggleFavorite } = useHistory();
   const [settingsTab, setSettingsTab] = useState<"general" | "providers" | "templates" | "history">("general");
   const [editingProfile, setEditingProfile] = useState<ProviderProfile | null | "new">(null);
   const [editingTemplate, setEditingTemplate] = useState<PromptTemplate | null | "new">(null);
   const [shortcut, setShortcut] = useState(config.shortcut);
+  const [theme, setTheme] = useState(config.theme || "dark");
 
   const backend = config.backend;
   const profiles = backend.profiles;
@@ -300,6 +305,22 @@ export function SettingsContent() {
 
         {settingsTab === "general" && (
           <div>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-300 mb-2">主题</label>
+              <select
+                value={theme}
+                onChange={(e) => {
+                  setTheme(e.target.value as typeof theme);
+                  setConfig({ ...config, theme: e.target.value as typeof theme });
+                  saveConfig();
+                }}
+                className="w-full bg-gray-700 rounded-lg p-2 text-gray-100 outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="dark">🌙 深色</option>
+                <option value="light">☀️ 浅色</option>
+                <option value="system">💻 跟随系统</option>
+              </select>
+            </div>
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-300 mb-2">输出模式</label>
               <select
@@ -474,6 +495,7 @@ export function SettingsContent() {
             history={history}
             onDelete={deleteHistoryItem}
             onClear={clearHistory}
+            onToggleFavorite={toggleFavorite}
           />
         )}
       </div>

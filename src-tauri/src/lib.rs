@@ -66,6 +66,7 @@ pub struct HistoryItem {
     pub output_preview: String,
     pub template_name: String,
     pub timestamp: i64,
+    pub favorite: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -238,7 +239,8 @@ fn init_db(conn: &Connection) -> SqlResult<()> {
             input TEXT NOT NULL,
             output TEXT NOT NULL,
             template_name TEXT NOT NULL,
-            timestamp INTEGER NOT NULL
+            timestamp INTEGER NOT NULL,
+            favorite INTEGER NOT NULL DEFAULT 0
         )",
         [],
     )?;
@@ -248,6 +250,12 @@ fn init_db(conn: &Connection) -> SqlResult<()> {
         "CREATE INDEX IF NOT EXISTS idx_history_timestamp ON history(timestamp DESC)",
         [],
     )?;
+    
+    // Add favorite column if it doesn't exist (for existing databases)
+    conn.execute(
+        "ALTER TABLE history ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0",
+        [],
+    ).ok(); // Ignore error if column already exists
     
     Ok(())
 }
@@ -329,7 +337,7 @@ async fn add_history(
     let timestamp = chrono_timestamp();
 
     conn.execute(
-        "INSERT INTO history (input, output, template_name, timestamp) VALUES (?, ?, ?, ?)",
+        "INSERT INTO history (input, output, template_name, timestamp, favorite) VALUES (?, ?, ?, ?, 0)",
         rusqlite::params![input, truncate_output(&outputPreview), templateName, timestamp],
     ).map_err(|e| e.to_string())?;
 
@@ -349,6 +357,7 @@ async fn add_history(
         output_preview: truncate_output(&outputPreview),
         template_name: templateName,
         timestamp,
+        favorite: false,
     })
 }
 
@@ -358,7 +367,7 @@ async fn get_history(state: State<'_, AppState>, limit: Option<usize>) -> Result
     let limit = limit.unwrap_or(100);
 
     let mut stmt = conn
-        .prepare("SELECT id, input, output, template_name, timestamp FROM history ORDER BY timestamp DESC LIMIT ?")
+        .prepare("SELECT id, input, output, template_name, timestamp, favorite FROM history ORDER BY timestamp DESC LIMIT ?")
         .map_err(|e| e.to_string())?;
 
     let rows = stmt
@@ -371,6 +380,7 @@ async fn get_history(state: State<'_, AppState>, limit: Option<usize>) -> Result
                 output_preview,
                 template_name: row.get(3)?,
                 timestamp: row.get(4)?,
+                favorite: row.get::<_, i64>(5)? != 0,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -386,6 +396,28 @@ async fn delete_history_item(state: State<'_, AppState>, id: i64) -> Result<(), 
         .map_err(|e| e.to_string())?;
     info!("Deleted history item: id={}", id);
     Ok(())
+}
+
+#[tauri::command]
+async fn toggle_history_favorite(state: State<'_, AppState>, id: i64) -> Result<bool, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    
+    // Get current favorite status
+    let current: i64 = conn.query_row(
+        "SELECT favorite FROM history WHERE id = ?",
+        [id],
+        |row| row.get(0),
+    ).map_err(|e| e.to_string())?;
+    
+    let new_value = if current == 0 { 1 } else { 0 };
+    
+    conn.execute(
+        "UPDATE history SET favorite = ? WHERE id = ?",
+        rusqlite::params![new_value, id],
+    ).map_err(|e| e.to_string())?;
+    
+    info!("Toggled history item favorite: id={}, new_value={}", id, new_value);
+    Ok(new_value != 0)
 }
 
 #[tauri::command]
@@ -675,6 +707,7 @@ pub fn run() {
             get_history,
             delete_history_item,
             clear_history,
+            toggle_history_favorite,
             get_shortcut,
             try_register_shortcut,
             save_shortcut,
